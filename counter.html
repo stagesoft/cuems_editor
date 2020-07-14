@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>WebSocket demo</title>
+        <style type="text/css">
+            body {
+                font-family: "Courier New", sans-serif;
+                text-align: center;
+            }
+            .buttons, .buttons2 {
+                font-size: 4em;
+                display: flex;
+                justify-content: center;
+            }
+            .button, .value {
+                line-height: 1;
+                padding: 2rem;
+                margin: 2rem;
+                border: medium solid;
+                min-height: 1em;
+                min-width: 1em;
+            }
+            .button {
+                cursor: pointer;
+                user-select: none;
+            }
+            .minus, .save{
+                color: red;
+            }
+            .plus, .load{
+                color: green;
+            }
+            .value {
+                min-width: 2em;
+            }
+            .state {
+                font-size: 2em;
+            }
+            /* The alert message box */
+            .alert {
+            padding: 20px;
+            background-color: #f44336; /* Red */
+            color: white;
+            margin-bottom: 15px;
+            display: none;
+            }
+            .alert.warning {
+                background-color: #ff9800;
+            }
+
+            /* The close button */
+            .closebtn {
+            margin-left: 15px;
+            color: white;
+            font-weight: bold;
+            float: right;
+            font-size: 22px;
+            line-height: 20px;
+            cursor: pointer;
+            transition: 0.3s;
+            }
+
+            /* When moving the mouse over the close button */
+            .closebtn:hover {
+            color: black;
+            }
+            .fade {
+            opacity: 0;
+            -webkit-transition: all 2s ease-in-out;
+            -moz-transition: all 2s ease-in-out;
+            -ms-transition: all 2s ease-in-out;
+            -o-transition: all 2s ease-in-out;
+            transition: all 2s ease-in-out;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="buttons">
+            <div class="minus button">-</div>
+            <div class="value">?</div>
+            <div class="plus button">+</div>
+        </div>
+        <div class="buttons2">
+            <div class="load button" id='load'>Load</div>
+            <textarea class="value" id='content'></textarea>
+            <div class="save button" id='save'>Save</div>
+        </div>
+        <div class="state">
+            <span class="users">?</span> online
+        </div>
+        <div class="alert warning fade" id='notifications'>
+            <span class="closebtn" onclick="this.parentElement.style.display='none';">&times;</span>
+        </div>
+        <script>
+            var minus = document.querySelector('.minus'),
+                plus = document.querySelector('.plus'),
+                value = document.querySelector('.value'),
+                users = document.querySelector('.users'),
+                load = document.querySelector('#load'),
+                save = document.querySelector('#save'),
+                content = document.querySelector('#content'),
+                notifications = document.querySelector('#notifications'),
+
+                websocket = new WebSocket("ws://127.0.0.1:6789/");
+            minus.onclick = function (event) {
+                websocket.send(JSON.stringify({action: 'minus'}));
+            }
+            plus.onclick = function (event) {
+                websocket.send(JSON.stringify({action: 'plus'}));
+            }
+            load.onclick = function (event) {
+                websocket.send(JSON.stringify({action: 'load'}));
+            }
+            save.onclick = function (event) {
+                websocket.send(JSON.stringify({action: 'save', data: content.value}));
+            }
+            websocket.onmessage = function (event) {
+                data = JSON.parse(event.data);
+                switch (data.type) {
+                    case 'counter':
+                        value.textContent = data.value;
+                        break;
+                    case 'users':
+                        users.textContent = (
+                            data.count.toString() + " user" +
+                            (data.count == 1 ? "" : "s"));
+                        break;
+                    case 'msg':
+                        content.value = data.value;
+                        break;
+                    case "state":
+                        notifications.textContent = data.value;
+                        notifications.style.opacity = 1;
+                    default:
+                        console.error(
+                            "unsupported event", data);
+                }
+            };
+        </script>
+    </body>
+</html>
