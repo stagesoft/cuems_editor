@@ -64,14 +64,7 @@
             .closebtn:hover {
             color: black;
             }
-            .fade {
-            opacity: 0;
-            -webkit-transition: all 2s ease-in-out;
-            -moz-transition: all 2s ease-in-out;
-            -ms-transition: all 2s ease-in-out;
-            -o-transition: all 2s ease-in-out;
-            transition: all 2s ease-in-out;
-            }
+           
         </style>
     </head>
     <body>
@@ -82,13 +75,14 @@
         </div>
         <div class="buttons2">
             <div class="load button" id='load'>Load</div>
+            <textarea id='project_id'>0</textarea>
             <textarea class="value" id='content'></textarea>
             <div class="save button" id='save'>Save</div>
         </div>
         <div class="state">
             <span class="users">?</span> online
         </div>
-        <div class="alert warning fade" id='notifications'>
+        <div class="alert warning" id='notifications'>
             <span class="closebtn" onclick="this.parentElement.style.display='none';">&times;</span>
         </div>
         <script>
@@ -100,6 +94,7 @@
                 save = document.querySelector('#save'),
                 content = document.querySelector('#content'),
                 notifications = document.querySelector('#notifications'),
+                project_id = document.querySelector('#project_id')
 
                 websocket = new WebSocket("ws://127.0.0.1:6789/");
             minus.onclick = function (event) {
@@ -109,7 +104,7 @@
                 websocket.send(JSON.stringify({action: 'plus'}));
             }
             load.onclick = function (event) {
-                websocket.send(JSON.stringify({action: 'load'}));
+                websocket.send(JSON.stringify({action: 'load', data: project_id.value}));
             }
             save.onclick = function (event) {
                 websocket.send(JSON.stringify({action: 'save', data: content.value}));
@@ -129,8 +124,11 @@
                         content.value = data.value;
                         break;
                     case "state":
-                        notifications.textContent = data.value;
-                        notifications.style.opacity = 1;
+                        var element = document.createElement("div");
+                        element.appendChild(document.createTextNode(data.value));
+                        notifications.appendChild(element);
+                        notifications.style.display = 'block';
+                        break;
                     default:
                         console.error(
                             "unsupported event", data);
