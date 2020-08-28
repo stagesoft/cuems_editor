@@ -43,8 +43,8 @@ class CuemsWsServer:
         try:
             consumer_task = asyncio.create_task(user_task.consumer_handler())
             producer_task = asyncio.create_task(user_task.producer_handler())
-            processor_task = asyncio.create_task(user_task.consumer())
-            done, pending = await asyncio.wait([consumer_task, producer_task, processor_task], return_when=asyncio.FIRST_COMPLETED)
+            processor_tasks = [asyncio.create_task(user_task.consumer()) for _ in range(3)] # start 3 message processing task so a load or any other time consuming action still leaves with 2 tasks running  and interface feels responsive. TODO:discuss this
+            done, pending = await asyncio.wait([consumer_task, producer_task, *processor_tasks], return_when=asyncio.FIRST_COMPLETED)
             
             
             for task in pending:
@@ -69,24 +69,30 @@ class CuemsWsServer:
             for user in self.users:
                 await user.outgoing.put(message)
                 print('{} ->>OUT puttting new message into the outgoing queue'.format(user))
-
-
-           # await asyncio.wait([user.outgoing.put(message) for user in self.users])
-           # await asyncio.wait([user.send(message) for user in self.users])
             
     async def notify_others(self, calling_user, type):
+        print('notifing others')
         if self.users:  #notify others, not the user trigering the action, and only if the have same project loaded
+            print('calling user {}'.format(calling_user))
+            
             message = self.users_event(type)
+            print(self.users)
             for user, project in self.users.items():
+                print('user {}'.format(user))
+                print('project {}'.format(project))
                 if user is not calling_user:
-                    if project is self.users[calling_user]:
+                    print('other user')
+                    print(self.users[calling_user])
+                    if str(project) == str(self.users[calling_user]):
+                        
+                        print('same project loaded')
                         await user.outgoing.put(message)
-
+                        print('notifing {}'.format(user))
+    
     async def notify_users(self, type):
         if self.users:  # asyncio.wait doesn't accept an empty dcit
             message = self.users_event(type)
             await asyncio.wait([user.outgoing.put(message) for user in self.users])
-
 
 
 
@@ -175,7 +181,7 @@ class CuemsWsUser(CuemsWsServer):
     async def received_project(self, data):
         try:
             logging.info("user {} saving project {} : {}".format(id(self.websocket), self.users[self], data))
-            if (self.save_project(self.users[self], json.loads(data))):
+            if (await self.save_project(self.users[self], json.loads(data))):
                 await self.notify_user("project saved")
                 await self.notify_others(self, "changes")
         except:
