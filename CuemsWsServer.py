@@ -12,107 +12,176 @@ from asgiref.sync import async_to_sync, sync_to_async
 import time
 
 logging.basicConfig(format='Cuems:ws-server: (%(threadName)-9s)-(%(funcName)s) %(message)s', level=logging.INFO)
+
+
 class CuemsWsServer:
-    def __init__(self, port):
+    state = {"value": 0}
+    users = dict()
+    projects = None
+
+    def __init__(self):
+        
+        self.event_loop = asyncio.get_event_loop()
+
+
+        
+
+    def start(self, port):
         self.port = port
         self.host = 'localhost'
-        self.event_loop = asyncio.get_event_loop()
-        
-        self.state = {"value": 0}
-
-        self.users = dict()
-
-        self.projects = None
-        logging.basicConfig(level=logging.INFO)
-
-        start_server = ws.serve(self.main_loop, self.host, self.port)
-        
+        start_server = ws.serve(self.handle, self.host, self.port)
         print('server listening on {}, port {}'.format(self.host, self.port))
         self.event_loop.run_until_complete(start_server)
         self.event_loop.run_forever()
+        return start_server
 
-    async def main_loop(self, websocket, path):
+    async def handle(self, websocket, path):
         logging.info('ws: {}, path: {}'.format(websocket, path))
-        await self.register(websocket)
+        user_task = CuemsWsUser(websocket, path)
+        await self.register(user_task)
+        await user_task.outgoing.put(self.counter_event())
         try:
-            await websocket.send(self.counter_event())
-            async for message in websocket:
-                data = json.loads(message)
-                if data["action"] == "minus":
-                    self.state["value"] -= 1
-                    await self.notify_state()
-                elif data["action"] == "plus":
-                    self.state["value"] += 1
-                    await self.notify_state()
-                elif data["action"] == "load":
-                    await self.send_project(websocket, data["value"])
-                elif data["action"] == "save":
-                    await self.received_project(websocket, data["value"])
-                elif data["action"] == "list":
-                    await self.list_projects(websocket)
-                else:
-                    logging.error("unsupported event: {}".format(data))
+            consumer_task = asyncio.create_task(user_task.consumer_handler())
+            producer_task = asyncio.create_task(user_task.producer_handler())
+            processor_task = asyncio.create_task(user_task.consumer())
+            done, pending = await asyncio.wait([consumer_task, producer_task, processor_task], return_when=asyncio.FIRST_COMPLETED)
+            
+            
+            for task in pending:
+                task.cancel()
         finally:
-            await self.unregister(websocket)
+            await self.unregister(user_task)
 
-    async def register(self, websocket):
-        logging.info("user registered: {}".format(id(websocket)))
-        self.users[websocket] = None
+
+    async def register(self, user_task):
+        logging.info("user registered: {}".format(id(user_task.websocket)))
+        self.users[user_task] = None
         await self.notify_users("users")
 
-    async def unregister(self, websocket):
-        logging.info("user unregistered: {}".format(id(websocket)))
-        self.users.pop(websocket, None)
+    async def unregister(self, user_task):
+        logging.info("user unregistered: {}".format(id(user_task.websocket)))
+        self.users.pop(user_task, None)
         await self.notify_users("users")
-
-    async def notify_user(self, websocket, msg):
-        await websocket.send(json.dumps({"type": "state", "value":msg}))
-
-    async def notify_others(self, websocket, type):
-        if self.users:  #notify others, not the user trigering the action, and only if the have same project loaded
-            message = self.users_event(type)
-            for user, project in self.users.items():
-                if user is not websocket:
-                    if project is self.users[websocket]:
-                        await user.send(message)
-
-    async def notify_users(self, type):
-        if self.users:  # asyncio.wait doesn't accept an empty dcit
-            message = self.users_event(type)
-            await asyncio.wait([user.send(message) for user in self.users])
-
-    async def list_projects(self, websocket):
-        
-        project_list = await self.load_project_list()    
-        await websocket.send(json.dumps({"type": "list", "value": project_list}))
-
-    async def send_project(self, websocket, project_uuid):
-        try:
-            print(project_uuid)
-            if project_uuid == '':
-                raise NameError
-            logging.info("user {} loading project {}".format(id(websocket), project_uuid))
-            project = await self.load_project(project_uuid)
-            msg = json.dumps({"type":"project", "value":json.dumps(project)})
-            await websocket.send(msg)
-            await self.notify_user(websocket, "project loaded")
-            self.users[websocket] = project_uuid
-        except:
-            print("error loading project")
-
-    async def received_project(self, websocket, data):
-        try:
-            logging.info("user {} saving project {} : {}".format(id(websocket), self.users[websocket], data))
-            if (self.save_project(self.users[websocket], json.loads(data))):
-                await self.notify_user(websocket, "project saved")
-                await self.notify_others(websocket, "changes")
-        except:
-            print("error saving project")
 
     async def notify_state(self):
         if self.users:  # asyncio.wait doesn't accept an empty dcit
             message = self.counter_event()
-            await asyncio.wait([user.send(message) for user in self.users])
+            for user in self.users:
+                await user.outgoing.put(message)
+                print('{} ->>OUT puttting new message into the outgoing queue'.format(user))
+
+
+           # await asyncio.wait([user.outgoing.put(message) for user in self.users])
+           # await asyncio.wait([user.send(message) for user in self.users])
+            
+    async def notify_others(self, calling_user, type):
+        if self.users:  #notify others, not the user trigering the action, and only if the have same project loaded
+            message = self.users_event(type)
+            for user, project in self.users.items():
+                if user is not calling_user:
+                    if project is self.users[calling_user]:
+                        await user.outgoing.put(message)
+
+    async def notify_users(self, type):
+        if self.users:  # asyncio.wait doesn't accept an empty dcit
+            message = self.users_event(type)
+            await asyncio.wait([user.outgoing.put(message) for user in self.users])
+
+
+
+
+    # warning, this non async function should bet not blocking or user @sync_to_async to get their own thread
+    def counter_event(self):
+        return json.dumps({"type": "counter", **self.state})
+
+
+    def users_event(self, type):
+        if type == "users":
+            return json.dumps({"type": type, "count": len(self.users)})
+        elif type == "changes":
+            return json.dumps({"type": "state", "value" : "project modified in server"})
+
+
+class CuemsWsUser(CuemsWsServer):
+    def __init__(self, websocket, path):
+        self.websocket = websocket
+        self.path = path
+        self.incoming = asyncio.Queue()
+        self.outgoing = asyncio.Queue()
+        super().__init__()
+        print(self.state)
+
+        
+
+    async def consumer_handler(self):
+        async for message in self.websocket:
+            print('{} -->>IN putting new message into the incoming queue'.format(self))
+            await self.incoming.put(message)
+
+    async def producer_handler(self):
+        while True:
+            message = await self.producer()
+            await self.websocket.send(message)
+
+    async def consumer(self):
+        print('here we go')
+        while True: 
+            message = await self.incoming.get()
+            print('{} <<--IN getting new message from the incoming queue'.format(self))
+            data = json.loads(message)
+            if data["action"] == "minus":
+                self.state["value"] -= 1
+                await self.notify_state()
+            elif data["action"] == "plus":
+                self.state["value"] += 1
+                await self.notify_state()
+            elif data["action"] == "load":
+                await self.send_project(data["value"])
+            elif data["action"] == "save":
+                await self.received_project(data["value"])
+            elif data["action"] == "list":
+                await self.list_projects()
+            else:
+                logging.error("unsupported event: {}".format(data))
+
+    async def producer(self):
+        while True:
+            message = await self.outgoing.get()
+            print('{} <<--OUT getting new message from the outgoing queue'.format(self))
+            return message
+
+    async def notify_user(self, msg):
+        await self.outgoing.put(json.dumps({"type": "state", "value":msg}))
+
+    async def list_projects(self):
+        
+        project_list = await self.load_project_list()    
+        await self.outgoing.put(json.dumps({"type": "list", "value": project_list}))
+
+    async def send_project(self, project_uuid):
+        try:
+            print(project_uuid)
+            if project_uuid == '':
+                raise NameError
+            logging.info("user {} loading project {}".format(id(self.websocket), project_uuid))
+            project = await self.load_project(project_uuid)
+            msg = json.dumps({"type":"project", "value":json.dumps(project)})
+            await self.outgoing.put(msg)
+            await self.notify_user("project loaded")
+            self.users[self] = project_uuid
+        except:
+            print("error loading project")
+
+    async def received_project(self, data):
+        try:
+            logging.info("user {} saving project {} : {}".format(id(self.websocket), self.users[self], data))
+            if (self.save_project(self.users[self], json.loads(data))):
+                await self.notify_user("project saved")
+                await self.notify_others(self, "changes")
+        except:
+            print("error saving project")
+
+
 
     @sync_to_async # call blocking function asynchronously (gets a thread)
     def load_project_list(self):
@@ -146,17 +215,7 @@ class CuemsWsServer:
                 return True
 
 
-    # warning, this non async function should bet not blocking or user @sync_to_async to get their own thread
-    def counter_event(self):
-        return json.dumps({"type": "counter", **self.state})
-
-
-    def users_event(self, type):
-        if type == "users":
-            return json.dumps({"type": type, "count": len(self.users)})
-        elif type == "changes":
-            return json.dumps({"type": "state", "value" : "project modified in server"})
 
 
 
-server = CuemsWsServer(9092)
+server = CuemsWsServer().start(9092)
