@@ -137,6 +137,7 @@
                         content.value = data.value;
                         break;
                     case "state":
+                    case "error":
                         var element = document.createElement("div");
                         element.appendChild(document.createTextNode(data.value));
                         notifications.appendChild(element);
