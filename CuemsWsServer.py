@@ -69,16 +69,21 @@ class CuemsWsServer:
                 await user.outgoing.put(message)
                 print('{} ->>OUT puttting new message into the outgoing queue'.format(user))
             
-    async def notify_others(self, calling_user, type):
-        print('notifing others')
+    async def notify_others(self, calling_user, type, project_uuid=None):
         if self.users:  #notify others, not the user trigering the action, and only if the have same project loaded
             message = self.users_event(type)
             for user, project in self.users.items():
                 if user is not calling_user:
-                    if str(project) == str(self.users[calling_user]):
-                        print('same project loaded')
-                        await user.outgoing.put(message)
-                        print('notifing {}'.format(user))
+                    if project_uuid is not None:
+                        if str(project) != str(project_uuid):
+                            continue
+                    else:
+                        if str(project) != str(self.users[calling_user]):
+                            continue
+
+                    print('same project loaded')
+                    await user.outgoing.put(message)
+                    print('notifing {}'.format(user))
     
     async def notify_users(self, type):
         if self.users:  # asyncio.wait doesn't accept an empty dcit
@@ -140,6 +145,8 @@ class CuemsWsUser(CuemsWsServer):
                 await self.send_project(data["value"])
             elif data["action"] == "save":
                 await self.received_project(data["value"])
+            elif data["action"] == "delete":
+                await self.request_delete(data["value"])
             elif data["action"] == "list":
                 await self.list_projects()
             else:
@@ -197,6 +204,21 @@ class CuemsWsUser(CuemsWsServer):
             print("error: {} {}".format(type(e), e))
             await self.notify_error_to_user('error saving project')
 
+    async def request_delete(self, project_uuid):
+        try:
+            logging.info("user {} deleting project: {}".format(id(self.websocket), project_uuid))
+            
+            if (await self.delete_project(project_uuid)):
+
+                # self.users[self] = None  #TODO:what is now the active project? deleted project was the active one?
+                await self.notify_user("project {} deleted".format(project_uuid))
+                await self.notify_others(self, "changes", project_uuid=project_uuid)
+        except Exception as e:
+            print("error deleting project")
+            print("error: {} {}".format(type(e), e))
+            await self.notify_error_to_user('error deleting project')
+
+
 
 
     @sync_to_async # call blocking function asynchronously (gets a thread)
@@ -216,8 +238,7 @@ class CuemsWsUser(CuemsWsServer):
         for elem in self.projects:
             if elem['CuemsScript']['uuid'] == project: 
                 return elem
-            else:
-                raise NameError
+        raise NameError
 
     @sync_to_async
     def save_project(self, uuid, data):
@@ -229,6 +250,17 @@ class CuemsWsUser(CuemsWsServer):
 
         self.projects.append(data)
         return 'new'
+
+    @sync_to_async
+    def delete_project(self, uuid):
+        logging.info('deleting project, uuid:{}'.format(uuid))
+        for num, elem in enumerate(self.projects):
+            if elem['CuemsScript']['uuid'] == uuid:
+                del self.projects[num]
+                return True
+
+        raise NameError
+
 
 
 
