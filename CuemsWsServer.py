@@ -7,12 +7,14 @@ import asyncio
 import json
 import logging
 import websockets as ws
-import  threading as th
+from multiprocessing import Process, Event
+import signal
+import os
 from asgiref.sync import async_to_sync, sync_to_async
 
 import time
 
-logging.basicConfig(format='Cuems:ws-server: (%(threadName)-9s)-(%(funcName)s) %(message)s', level=logging.INFO)
+logging.basicConfig(format='Cuems:ws-server: (PID: %(process)d)-%(threadName)-9s)-(%(funcName)s) %(message)s', level=logging.INFO)
 
 
 class CuemsWsServer():
@@ -24,30 +26,37 @@ class CuemsWsServer():
         
         self.event_loop = asyncio.new_event_loop()
         self.event_loop.set_exception_handler(self.exception_handler)
-        self.thread = th.Thread(target=self.run_async_server, daemon=False)
+        self.event = Event()
+        self.process = Process(target=self.run_async_server, args=(self.event,))
         
 
     def start(self, port):
         self.port = port
         self.host = 'localhost'
-        self.thread.start()
+        self.process.start()
         
 
-    def run_async_server(self):
+    def run_async_server(self, event):
         asyncio.set_event_loop(self.event_loop)
+        for sig in (signal.SIGINT, signal.SIGTERM):
+            self.event_loop.add_signal_handler(sig, self.ask_exit)
         self.project_server = ws.serve(self.handle, self.host, self.port)
         logging.info('server listening on {}, port {}'.format(self.host, self.port))
         self.event_loop.run_until_complete(self.project_server)
         self.event_loop.run_forever()
         self.event_loop.close()
-
+        
     def stop(self):
+        os.kill(self.process.pid, signal.SIGTERM)
+        self.process.join()
+        logging.info('ws process joined')
+        
+    def ask_exit(self):
         self.event_loop.call_soon_threadsafe(self.project_server.ws_server.close)
         logging.info('ws server closing')
         asyncio.run_coroutine_threadsafe(self.stop_async(), self.event_loop)
         
-        self.thread.join()
-        logging.info('ws thread joined')
+        
 
     async def stop_async(self):
         await self.project_server.ws_server.wait_closed()
