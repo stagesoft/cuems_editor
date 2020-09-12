@@ -6,6 +6,8 @@ import sys
 import asyncio
 import json
 import logging
+import os
+import aiofiles
 import websockets as ws
 import  threading as th
 from asgiref.sync import async_to_sync, sync_to_async
@@ -23,7 +25,7 @@ class CuemsWsServer():
     def __init__(self):
         
         self.event_loop = asyncio.new_event_loop()
-        self.event_loop.set_exception_handler(self.exception_handler)
+        # self.event_loop.set_exception_handler(self.exception_handler)
         self.thread = th.Thread(target=self.run_async_server, daemon=False)
         
 
@@ -35,7 +37,7 @@ class CuemsWsServer():
 
     def run_async_server(self):
         asyncio.set_event_loop(self.event_loop)
-        self.project_server = ws.serve(self.handle, self.host, self.port)
+        self.project_server = ws.serve(self.handle, self.host, self.port, max_size=None)
         logging.info('server listening on {}, port {}'.format(self.host, self.port))
         self.event_loop.run_until_complete(self.project_server)
         self.event_loop.run_forever()
@@ -123,9 +125,9 @@ class CuemsWsServer():
         elif type == "changes":
             return json.dumps({"type": "state", "value" : "project modified in server"})
 
-    def exception_handler(self, loop, context):
-        logging.debug("Caught the following exception: (ignore if on closing)")
-        logging.debug(context['message'])
+    # def exception_handler(self, loop, context):
+    #     logging.debug("Caught the following exception: (ignore if on closing)")
+    #     logging.debug(context['message'])
 
 
 class CuemsWsUser(CuemsWsServer):
@@ -135,19 +137,28 @@ class CuemsWsUser(CuemsWsServer):
         self.incoming = asyncio.Queue()
         self.outgoing = asyncio.Queue()
         self.users[self] = None
-
-        
+        self.uploading = False
+        self.filename_path = None
+        self.bytes_received = 0
 
         
 
     async def consumer_handler(self):
         async for message in self.websocket:
-            await self.incoming.put(message)
+            print(type(message))
+            if isinstance(message, str):
+                await self.incoming.put(message)
+            else:
+                await self.set_upload(bin_data=message)
 
     async def producer_handler(self):
         while True:
             message = await self.producer()
-            await self.websocket.send(message)
+            try:
+                await self.websocket.send(message)
+            except ws.exceptions.ConnectionClosedError as e:
+                print(e)
+                break
 
     async def consumer(self):
         while True: 
@@ -167,9 +178,29 @@ class CuemsWsUser(CuemsWsServer):
                 await self.request_delete(data["value"])
             elif data["action"] == "list":
                 await self.list_projects()
+            elif data["action"] == "file":
+                await self.set_upload(filename=data["value"])
             else:
                 logging.error("unsupported event: {}".format(data))
                 await self.notify_error_to_user("unsupported event: {}".format(data))
+
+    async def set_upload(self, filename=None, bin_data=None):
+            
+            if filename is not None and bin_data is None and self.uploading is False:
+                self.filename_path = os.path.join(os.getcwd(), 'upload', filename)
+                logging.info(self.filename_path)
+                if not os.path.exists(self.filename_path):
+                    self.uploading = 'Ready'
+            elif filename is None and bin_data is not None and self.uploading == 'Ready':
+                async with aiofiles.open(self.filename_path, 'wb') as f:
+                    while True:
+                        if bin_data is None: break
+                        await f.write(bin_data)
+                        self.bytes_received += len(bin_data)
+                        await self.outgoing.put(str(self.bytes_received))
+                        print('Received {} bytes ({} total)'.format(len(bin_data), self.bytes_received))
+                print('upload completed')
+                       
 
     async def producer(self):
         while True:
