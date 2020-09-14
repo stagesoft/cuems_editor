@@ -1,109 +1,160 @@
 <!DOCTYPE html>
 <html>
-    <head>
-        <title>WebSocket demo</title>
-        <link rel="stylesheet" href="http://maxcdn.bootstrapcdn.com/bootstrap/3.3.4/css/bootstrap.min.css">
-        <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.11.1/jquery.min.js"></script>
-        <script src="http://maxcdn.bootstrapcdn.com/bootstrap/3.3.4/js/bootstrap.min.js"></script>
 
-        <!-- Uploader JS and CSS -->
-        <script>
-            
-            function Uploader(id) {
-                this.CHUNK_SIZE = 1024 * 1024;  // Read 1MB chunks
-                this.mainDiv = document.getElementById(id);
-                this.reader = new FileReader();
-                // this.reader.error = ;  TODO(robinjia): set this.
+<head>
+    <title>WebSocket demo</title>
+    <link rel="stylesheet" href="http://maxcdn.bootstrapcdn.com/bootstrap/3.3.4/css/bootstrap.min.css">
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.11.1/jquery.min.js"></script>
+    <script src="http://maxcdn.bootstrapcdn.com/bootstrap/3.3.4/js/bootstrap.min.js"></script>
+
+    <!-- Uploader JS and CSS -->
+    <script>
+        function GalileoSend(param) {
+            var ws = new WebSocket(param.url);
+            var file = param.file;
+            var filedata = { action: 'upload', value: { name: file.name, size: file.size }};
+
+            var chunksize = param.chunksize || 500000;
+            var slice_start = 0;
+            var end = filedata.size;
+            var finished = false;
+            var success = false;  // set to true on completion
+            var error_messages = [];
+
+            ws.onopen = function () { ws.send(JSON.stringify(filedata)) };
+
+            ws.onmessage = function (e) {
+                var status = JSON.parse(e.data);
+                console.log(status)
+                console.log(status.ready)
+                // got close signal
+                if (status.close) {
+                    if (finished) {
+                        success = true;
+                    }
+                    ws.close();
+                    return;
+                }
+
+                // server reports error
+                if (status.error) {
+                    if (param.onerror) {
+                        param.onerror(status);
+                    }
+                    error_messages.push(status);
+                    if (status.fatal) {
+                        ws.close();
+                    }
+                    return;
+                }
+
+                // anything else but ready signal is ignored
+                if (!status.ready) {
+                    return;
+                }
+
+                // upload already successful, inform server
+                if (finished) {
+                    ws.send(JSON.stringify({ finished: true }));
+                    return;
+                }
+
+                // server is ready for next chunk
+                var slice_end = slice_start + (status.chunksize || chunksize);
+                if (slice_end >= end) {
+                    slice_end = end;
+                    finished = true;
+                }
+                ws.send(file.slice(slice_start, slice_end));
+                if (param.onchunk) {
+                    param.onchunk(slice_end / end);  // send ratio completed
+                }
+                slice_start = slice_end;
+                param.progressbar.updateValue(slice_end)
+                return;
+            };
+
+            ws.onclose = function () {
+                if (success) {
+                    if (param.onsuccess) {
+                        param.onsuccess();
+                    }
+                    return;
+                }
+
+                if (error_messages.length == 0) {
+                    error_messages[0] = { error: 'Unknown upload error' };
+                }
+
+                if (param.onfailure) {
+                    param.onfailure(error_messages);
+                } else {
+                    console.log(error_messages);
+                }
             }
+        }
+        /////////////////////////
+        function Uploader(id) {
+            this.CHUNK_SIZE = 1024 * 1024;  // Read 1MB chunks
+            this.mainDiv = document.getElementById(id);
+            this.reader = new FileReader();
+            // this.reader.error = ;  TODO(robinjia): set this.
+        }
 
-            Uploader.prototype.render = function() {
-                var uploader = this;
-                var CHUNK_SIZE = this.CHUNK_SIZE;
-                var mainDiv = this.mainDiv;
-                var reader = this.reader;
-                
+        Uploader.prototype.render = function () {
+            var uploader = this;
+            var CHUNK_SIZE = this.CHUNK_SIZE;
+            var mainDiv = this.mainDiv;
+            var reader = this.reader;
 
-                var buttonRow = this.createButtonRow();
-                var fileInput = this.createFileInput(buttonRow);
-                var submit = this.createSubmitButton(buttonRow);
-                var filenameDisplay = this.createFilenameDisplay();
+            var buttonRow = this.createButtonRow();
+            var fileInput = this.createFileInput(buttonRow);
+            var submit = this.createSubmitButton(buttonRow);
+            var filenameDisplay = this.createFilenameDisplay();
 
-            fileInput.onchange = function() {
+            fileInput.onchange = function () {
                 var fileList = fileInput.files;
-                
                 console.log(fileList);
                 if (fileList.length == 0) {
-                submit.style.display = "none";
-                filenameDisplay.style.display = "none";
+                    submit.style.display = "none";
+                    filenameDisplay.style.display = "none";
                 } else {
-                submit.style.display = "inline";
-                filenameDisplay.style.display = "block";
-                console.log(fileList.item(0));
-                $(filenameDisplay).text("Chosen file: " + fileList.item(0).name);
+                    submit.style.display = "inline";
+                    filenameDisplay.style.display = "block";
+                    console.log(fileList.item(0));
+                    $(filenameDisplay).text("Chosen file: " + fileList.item(0).name);
                 }
             }
 
             /* On submit, read file in chunks and send data over websocket */
-            submit.onclick = function() {
+            submit.onclick = function () {
                 var fileInputParent = fileInput.parentNode;
                 fileInputParent.setAttribute("class", fileInputParent.className + " disabled");
                 submit.setAttribute("class", submit.className + " disabled");
                 var file = fileInput.files.item(0);
                 var fileSize = file.size;
-                var ws = new WebSocket("ws://localhost:9092");
-                console.log("Buffered amount: " + ws.bufferedAmount);
+                
                 var progressOuterDiv = document.createElement("div");
                 var progressBar = new ProgressBar(progressOuterDiv, fileSize);
                 mainDiv.appendChild(progressOuterDiv);
-
-                /* Start one file read operation */
-                var curStart = 0;
-                var startReadCurChunk = function() {
-                    if (curStart < fileSize) {
-                        reader.readAsArrayBuffer(file.slice(curStart, curStart + CHUNK_SIZE));
-                    } else {
-                        // progressBar.updateValue(fileSize);
-                        // console.log("Buffered amount: " + ws.bufferedAmount);
-                    }
-                }
-
-                /* When the previous read finishes, send data and start the next read */
-                reader.onload = function(e) {
-                ws.send(reader.result);
-                // progressBar.updateValue(curStart);
-                curStart += CHUNK_SIZE;
-                startReadCurChunk();
-                }
-
-                /* Update progress bar when the server signals that it has received data. */
-                ws.onmessage = function(e) {
-                    console.log(e)
-                    var curBytes = parseInt(e.data);
-                    console.log(curBytes)
-                    progressBar.updateValue(curBytes)
-                    if (curBytes >= fileSize) {
-                        ws.close()
-                    }
-                }
-
-                ws.onopen = function() {
-                /* Send the filename */
-                ws.send(JSON.stringify({action: 'file', value: file.name}));
-
-                /* Start the loop! */
-                startReadCurChunk();
-                }
+                /////
+                var params = {};
+                params.file = file;
+                params.url = "ws://localhost:9092";
+                params.progressbar = progressBar;
+                GalileoSend(params);
+              
             }
-            }
+        }
 
-            Uploader.prototype.createButtonRow = function() {
+        Uploader.prototype.createButtonRow = function () {
             var buttonRow = document.createElement("div");
             buttonRow.style.marginBottom = "20px";
             this.mainDiv.appendChild(buttonRow);
             return buttonRow;
-            }
+        }
 
-            Uploader.prototype.createFileInput = function(buttonRow) {
+        Uploader.prototype.createFileInput = function (buttonRow) {
             var fileDiv = document.createElement("div");
             fileDiv.innerHTML = "<span>Choose File</span>";
             fileDiv.className = "btn btn-primary file-upload";
@@ -114,60 +165,60 @@
             fileDiv.appendChild(fileInput)
             buttonRow.appendChild(fileDiv);
             return fileInput;
-            }
+        }
 
-            Uploader.prototype.createSubmitButton = function(buttonRow) {
+        Uploader.prototype.createSubmitButton = function (buttonRow) {
             var submit = document.createElement("button");
-            submit.type="button";
+            submit.type = "button";
             submit.innerHTML = "Start Upload";
             submit.id = "submit-button";
             submit.className = "btn btn-primary";
             submit.style.display = "none";
             buttonRow.appendChild(submit);
             return submit;
-            }
+        }
 
-            Uploader.prototype.createFilenameDisplay = function() {
+        Uploader.prototype.createFilenameDisplay = function () {
             var filenameDisplay = document.createElement("p");
             filenameDisplay.style.display = "none";
             this.mainDiv.appendChild(filenameDisplay);
             return filenameDisplay;
-            }
+        }
 
-            function ProgressBar(outerDiv, fileSize) {
-                this.outerDiv = outerDiv;
-                this.fileSize = fileSize;
-                this.fileSizeStr = this.numToByteString(this.fileSize);
-                var barOuter = document.createElement("div");
-                barOuter.className = "progress";
-                this.bar = document.createElement("div");
-                this.bar.className = "progress-bar";
-                this.bar.setAttribute("role", "progressbar");
-                this.bar.setAttribute("aria-valuemin", "0");
-                this.bar.setAttribute("aria-valuemax", "100");
-                barOuter.appendChild(this.bar);
-                this.outerDiv.appendChild(barOuter);
+        function ProgressBar(outerDiv, fileSize) {
+            this.outerDiv = outerDiv;
+            this.fileSize = fileSize;
+            this.fileSizeStr = this.numToByteString(this.fileSize);
+            var barOuter = document.createElement("div");
+            barOuter.className = "progress";
+            this.bar = document.createElement("div");
+            this.bar.className = "progress-bar";
+            this.bar.setAttribute("role", "progressbar");
+            this.bar.setAttribute("aria-valuemin", "0");
+            this.bar.setAttribute("aria-valuemax", "100");
+            barOuter.appendChild(this.bar);
+            this.outerDiv.appendChild(barOuter);
 
-                this.text = document.createElement("p");
-                this.outerDiv.appendChild(this.text);
+            this.text = document.createElement("p");
+            this.outerDiv.appendChild(this.text);
 
-                this.message = document.createElement("p");
-                this.outerDiv.appendChild(this.message);
+            this.message = document.createElement("p");
+            this.outerDiv.appendChild(this.message);
 
-                this.updateValue(0);
-            }
+            this.updateValue(0);
+        }
 
-            ProgressBar.prototype.numToByteString = function(value) {
+        ProgressBar.prototype.numToByteString = function (value) {
             /* Use powers of 1024. */
             var amount;
             var unit;
             if (value < 1024) {
                 amount = value;
                 unit = "B";
-            } else if (value < 1024 * 1024) { 
+            } else if (value < 1024 * 1024) {
                 amount = value / 1024;
                 unit = "kB"
-            } else if (value < 1024 * 1024 * 1024) { 
+            } else if (value < 1024 * 1024 * 1024) {
                 amount = value / (1024 * 1024);
                 unit = "MB";
             } else {
@@ -175,9 +226,9 @@
                 unit = "GB";
             }
             return amount.toFixed(1) + " " + unit;
-            }
+        }
 
-            ProgressBar.prototype.updateValue = function(value) {
+        ProgressBar.prototype.updateValue = function (value) {
             if (value == this.fileSize) {
                 this.text.innerHTML = "All " + this.fileSizeStr + " transferred.";
                 this.message.innerHTML = "You may safely close this window.";
@@ -188,6 +239,9 @@
             }
 
             var percent = Math.floor(value / this.fileSize * 100);
+            if (percent > 100) {
+                percent = 100;
+            }
             this.bar.setAttribute("aria-valuenow", percent);
             this.bar.style.width = percent + "%";
             this.bar.innerHTML = percent + "%";
@@ -196,68 +250,82 @@
             this.bar.style.display = "none";
             this.bar.offsetHeight;
             this.bar.style.display = "block";
-            }
+        }
 
-                /*
-                for (var i = 0; i < fileInput.files.length; i++) {
-                var file = fileInput.files.item(i);
-                console.log(file);
-                console.log(readBlob(file.slice(0, 3)));
-                console.log(readBlob(file.slice(3, 6)));
-                }
-                */
+        /*
+        for (var i = 0; i < fileInput.files.length; i++) {
+        var file = fileInput.files.item(i);
+        console.log(file);
+        console.log(readBlob(file.slice(0, 3)));
+        console.log(readBlob(file.slice(3, 6)));
+        }
+        */
+    </script>
+    <link rel="stylesheet" type="text/css" href="./static/stylesheets/main.css">
+    </link>
+    <style type="text/css">
+        body {
+            font-family: "Courier New", sans-serif;
+            text-align: center;
+            height: 100vh;
+        }
 
-        </script>
-        <link rel="stylesheet" type="text/css" href="./static/stylesheets/main.css"></link>
-        <style type="text/css">
-            body {
-                font-family: "Courier New", sans-serif;
-                text-align: center;
-                height: 100vh;
-            }
-            .buttons, .buttons2 {
-                font-size: 4em;
-                display: flex;
-                justify-content: center;
-            }
-            .button, .value {
-                line-height: 1;
-                padding: 2rem;
-                margin: 2rem;
-                border: medium solid;
-                min-height: 1em;
-                min-width: 1em;
-            }
-            .button {
-                cursor: pointer;
-                user-select: none;
-            }
-            .minus, .save{
-                color: red;
-            }
-            .plus, .load{
-                color: green;
-            }
-            .value {
-                min-width: 2em;
-            }
-            .state {
-                font-size: 2em;
-            }
-            /* The alert message box */
-            .alert {
+        .buttons,
+        .buttons2 {
+            font-size: 4em;
+            display: flex;
+            justify-content: center;
+        }
+
+        .button,
+        .value {
+            line-height: 1;
+            padding: 2rem;
+            margin: 2rem;
+            border: medium solid;
+            min-height: 1em;
+            min-width: 1em;
+        }
+
+        .button {
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .minus,
+        .save {
+            color: red;
+        }
+
+        .plus,
+        .load {
+            color: green;
+        }
+
+        .value {
+            min-width: 2em;
+        }
+
+        .state {
+            font-size: 2em;
+        }
+
+        /* The alert message box */
+        .alert {
             padding: 20px;
-            background-color: #f44336; /* Red */
+            background-color: #f44336;
+            /* Red */
             color: white;
             margin-bottom: 15px;
             display: none;
-            }
-            .alert.warning {
-                background-color: #ff9800;
-            }
+        }
 
-            /* The close button */
-            .closebtn {
+        .alert.warning {
+            background-color: #ff9800;
+        }
+
+        /* The close button */
+        .closebtn {
             margin-left: 15px;
             color: white;
             font-weight: bold;
@@ -266,115 +334,116 @@
             line-height: 20px;
             cursor: pointer;
             transition: 0.3s;
-            }
+        }
 
-            /* When moving the mouse over the close button */
-            .closebtn:hover {
+        /* When moving the mouse over the close button */
+        .closebtn:hover {
             color: black;
-            }
+        }
 
-            .zone {
-                border-style: dotted;
-                border-width: 1pt;
-                width: 50%;
-                height: 5%;
-            }
-           
-        </style>
-    </head>
-    <body>
-        <div class="buttons">
-            <div class="minus button">-</div>
-            <div class="value">?</div>
-            <div class="plus button">+</div>
-        </div>
-        <div class="load list button" id='list'>Load project list</div>
-        <div class="buttons2">
-            <div class="load button" id='load'>Load</div>
+        .zone {
+            border-style: dotted;
+            border-width: 1pt;
+            width: 50%;
+            height: 5%;
+        }
+    </style>
+</head>
 
-            <select  id='project_id'>
-              
-            </select>
-            <textarea class="value" id='content'></textarea>
-            <div class="save button" id='save'>Save</div>
-        </div>
-        <div class="state">
-            <span class="users">?</span> online
-        </div>
-        <div class="alert warning" id='notifications'>
-            <span class="closebtn" onclick="this.parentElement.style.display='none';">&times;</span>
-        </div>
+<body>
+    <div class="buttons">
+        <div class="minus button">-</div>
+        <div class="value">?</div>
+        <div class="plus button">+</div>
+    </div>
+    <div class="load list button" id='list'>Load project list</div>
+    <div class="buttons2">
+        <div class="load button" id='load'>Load</div>
 
-        <div class="zone" id="dropZone">
+        <select id='project_id'>
 
-        </div>
-        <div id="uploader"></div>
-        <script type="text/javascript">
+        </select>
+        <textarea class="value" id='content'></textarea>
+        <div class="save button" id='save'>Save</div>
+    </div>
+    <div class="state">
+        <span class="users">?</span> online
+    </div>
+    <div class="alert warning" id='notifications'>
+        <span class="closebtn" onclick="this.parentElement.style.display='none';">&times;</span>
+    </div>
+
+    <div class="zone" id="dropZone">
+
+    </div>
+    <div id="uploader"></div>
+    <script type="text/javascript">
         //<![CDATA[
         new Uploader("uploader").render();
         //]]>
-        </script>
+    </script>
 
-        <script>
-            var minus = document.querySelector('.minus'),
-                plus = document.querySelector('.plus'),
-                value = document.querySelector('.value'),
-                users = document.querySelector('.users'),
-                list = document.querySelector('#list')
-                load = document.querySelector('#load'),
-                save = document.querySelector('#save'),
-                content = document.querySelector('#content'),
-                notifications = document.querySelector('#notifications'),
-                project_id = document.querySelector('#project_id')
+    <script>
+        var minus = document.querySelector('.minus'),
+            plus = document.querySelector('.plus'),
+            value = document.querySelector('.value'),
+            users = document.querySelector('.users'),
+            list = document.querySelector('#list')
+        load = document.querySelector('#load'),
+            save = document.querySelector('#save'),
+            content = document.querySelector('#content'),
+            notifications = document.querySelector('#notifications'),
+            project_id = document.querySelector('#project_id')
 
-                //websocket = new WebSocket("wss://dev.stagelab.net/ws");
-                websocket = new WebSocket("ws://localhost:9092");
-            minus.onclick = function (event) {
-                websocket.send(JSON.stringify({action: 'minus'}));
+        //websocket = new WebSocket("wss://dev.stagelab.net/ws");
+        websocket = new WebSocket("ws://localhost:9092");
+        minus.onclick = function (event) {
+            websocket.send(JSON.stringify({ action: 'minus' }));
+        }
+        plus.onclick = function (event) {
+            websocket.send(JSON.stringify({ action: 'plus' }));
+        }
+        list.onclick = function (event) {
+            websocket.send(JSON.stringify({ action: 'list' }));
+        }
+        load.onclick = function (event) {
+            //  websocket.send(JSON.stringify({action: 'load', value: project_id.value}));
+            websocket.send(JSON.stringify({ action: 'load', value: '76861217-2d40-47a2-bdb5-8f9c91293855' }));
+        }
+        save.onclick = function (event) {
+            websocket.send(JSON.stringify({ action: 'save', value: content.value }));
+        }
+        websocket.onmessage = function (event) {
+            data = JSON.parse(event.data);
+            switch (data.type) {
+                case 'counter':
+                    value.textContent = data.value;
+                    break;
+                case 'users':
+                    users.textContent = (
+                        data.count.toString() + " user" +
+                        (data.count == 1 ? "" : "s"));
+                    break;
+                case "list":
+                    content.value = data.value;
+                    break;
+                case 'project':
+                    content.value = data.value;
+                    break;
+                case "state":
+                case "error":
+                    var element = document.createElement("div");
+                    element.appendChild(document.createTextNode(data.value));
+                    notifications.appendChild(element);
+                    notifications.style.display = 'block';
+                    break;
+                default:
+                    console.error(
+                        "unsupported event", data);
             }
-            plus.onclick = function (event) {
-                websocket.send(JSON.stringify({action: 'plus'}));
-            }
-            list.onclick = function (event) {
-                websocket.send(JSON.stringify({action: 'list'}));
-            }
-            load.onclick = function (event) {
-              //  websocket.send(JSON.stringify({action: 'load', value: project_id.value}));
-              websocket.send(JSON.stringify({action: 'load', value: '76861217-2d40-47a2-bdb5-8f9c91293855'}));
-            }
-            save.onclick = function (event) {
-                websocket.send(JSON.stringify({action: 'save', value: content.value}));
-            }
-            websocket.onmessage = function (event) {
-                data = JSON.parse(event.data);
-                switch (data.type) {
-                    case 'counter':
-                        value.textContent = data.value;
-                        break;
-                    case 'users':
-                        users.textContent = (
-                            data.count.toString() + " user" +
-                            (data.count == 1 ? "" : "s"));
-                        break;
-                    case "list":
-                        content.value = data.value;
-                        break;
-                    case 'project':
-                        content.value = data.value;
-                        break;
-                    case "state":
-                    case "error":
-                        var element = document.createElement("div");
-                        element.appendChild(document.createTextNode(data.value));
-                        notifications.appendChild(element);
-                        notifications.style.display = 'block';
-                        break;
-                    default:
-                        console.error(
-                            "unsupported event", data);
-                }
-            };
-            
-        </script>
-    </body>
+        };
+
+    </script>
+</body>
+
 </html>

@@ -140,16 +140,19 @@ class CuemsWsUser(CuemsWsServer):
         self.uploading = False
         self.filename_path = None
         self.bytes_received = 0
+        self.filesize = 0
 
         
 
     async def consumer_handler(self):
-        async for message in self.websocket:
-            print(type(message))
-            if isinstance(message, str):
-                await self.incoming.put(message)
-            else:
-                await self.set_upload(bin_data=message)
+        try:
+            async for message in self.websocket:
+                if isinstance(message, str):
+                    await self.incoming.put(message)
+                else:
+                    await self.set_upload(bin_data=message)
+        except ws.exceptions.ConnectionClosedError as e:
+                print(e)
 
     async def producer_handler(self):
         while True:
@@ -164,7 +167,10 @@ class CuemsWsUser(CuemsWsServer):
         while True: 
             message = await self.incoming.get()
             data = json.loads(message)
-            if data["action"] == "minus":
+            if "action" not in data:
+                logging.error("unsupported event: {}".format(data))
+                await self.notify_error_to_user("unsupported event: {}".format(data))
+            elif data["action"] == "minus":
                 self.state["value"] -= 1
                 await self.notify_state()
             elif data["action"] == "plus":
@@ -178,28 +184,39 @@ class CuemsWsUser(CuemsWsServer):
                 await self.request_delete(data["value"])
             elif data["action"] == "list":
                 await self.list_projects()
-            elif data["action"] == "file":
-                await self.set_upload(filename=data["value"])
+            elif data["action"] == "upload":
+                await self.set_upload(file_info=data["value"])
             else:
-                logging.error("unsupported event: {}".format(data))
-                await self.notify_error_to_user("unsupported event: {}".format(data))
+                logging.error("unsupported action: {}".format(data))
+                await self.notify_error_to_user("unsupported action: {}".format(data))
 
-    async def set_upload(self, filename=None, bin_data=None):
+    async def set_upload(self, file_info=None, bin_data=None):
             
-            if filename is not None and bin_data is None and self.uploading is False:
-                self.filename_path = os.path.join(os.getcwd(), 'upload', filename)
+            if file_info is not None and bin_data is None and self.uploading is False:
+                print('getting ready to UPLOAD')
+                self.filesize = file_info['size']
+                self.filename_path = os.path.join(os.getcwd(), 'upload', file_info['name'])
                 logging.info(self.filename_path)
                 if not os.path.exists(self.filename_path):
+                    self.f = open(self.filename_path, 'wb')
                     self.uploading = 'Ready'
-            elif filename is None and bin_data is not None and self.uploading == 'Ready':
-                async with aiofiles.open(self.filename_path, 'wb') as f:
-                    while True:
-                        if bin_data is None: break
-                        await f.write(bin_data)
+                    await self.outgoing.put(json.dumps({"ready" : True}))
+            elif file_info is None and bin_data is not None and self.uploading == 'Ready':
+                
+                    if (self.bytes_received < self.filesize):
+                        print('UPLOADING')
+                        self.f.write(bin_data)
                         self.bytes_received += len(bin_data)
-                        await self.outgoing.put(str(self.bytes_received))
+                        await self.outgoing.put(json.dumps({"ready" : True}))
                         print('Received {} bytes ({} total)'.format(len(bin_data), self.bytes_received))
-                print('upload completed')
+                    else:
+                        self.f.close()
+                        self.f = None
+                        await self.outgoing.put(json.dumps({"finished" : True}))
+                        self.uploading = False
+                        print('upload completed')
+                        await self.outgoing.put(json.dumps({"close" : True}))
+                    
                        
 
     async def producer(self):
