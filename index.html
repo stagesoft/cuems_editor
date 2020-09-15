@@ -55,6 +55,7 @@
 
                 // upload already successful, inform server
                 if (finished) {
+                    console.log('sending finished')
                     ws.send(JSON.stringify({ finished: true }));
                     return;
                 }
@@ -140,7 +141,7 @@
                 /////
                 var params = {};
                 params.file = file;
-                params.url = "ws://localhost:9092";
+                params.url = "ws://localhost:9092/upload";
                 params.progressbar = progressBar;
                 GalileoSend(params);
               

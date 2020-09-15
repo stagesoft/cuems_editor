@@ -25,7 +25,7 @@ class CuemsWsServer():
     def __init__(self):
         
         self.event_loop = asyncio.new_event_loop()
-        # self.event_loop.set_exception_handler(self.exception_handler)
+        # self.event_loop.set_exception_handler(self.exception_handler)  /// UNCOMENT!!
         self.thread = th.Thread(target=self.run_async_server, daemon=False)
         
 
@@ -37,7 +37,7 @@ class CuemsWsServer():
 
     def run_async_server(self):
         asyncio.set_event_loop(self.event_loop)
-        self.project_server = ws.serve(self.handle, self.host, self.port, max_size=None)
+        self.project_server = ws.serve(self.connection_handler, self.host, self.port, max_size=None)
         logging.info('server listening on {}, port {}'.format(self.host, self.port))
         self.event_loop.run_until_complete(self.project_server)
         self.event_loop.run_forever()
@@ -57,23 +57,42 @@ class CuemsWsServer():
         self.event_loop.call_soon(self.event_loop.stop)
         logging.info('event loop stoped')
 
-    async def handle(self, websocket, path):
-        user_task = CuemsWsUser(websocket, path)
-        await self.register(user_task)
-        await user_task.outgoing.put(self.counter_event())
+    async def connection_handler(self, websocket, path):
+        
+        logging.info("new connection: {}, path: {}".format(websocket, path))
+
+        if path == '/':                                    # project manager
+            await self.project_manager_session(websocket)
+        elif path == '/upload':                            # file upload
+            await self.upload_session(websocket)
+        else:
+            logging.info("unknow path: {}".format(path))
+
+    async def project_manager_session(self, websocket):
+        user_session = CuemsWsUser(websocket)
+        await self.register(user_session)
+        await user_session.outgoing.put(self.counter_event())
         try:
-            consumer_task = asyncio.create_task(user_task.consumer_handler())
-            producer_task = asyncio.create_task(user_task.producer_handler())
-            processor_tasks = [asyncio.create_task(user_task.consumer()) for _ in range(3)] # start 3 message processing task so a load or any other time consuming action still leaves with 2 tasks running  and interface feels responsive. TODO:discuss this
+            consumer_task = asyncio.create_task(user_session.consumer_handler())
+            producer_task = asyncio.create_task(user_session.producer_handler())
+            # start 3 message processing task so a load or any other time consuming action still leaves with 2 tasks running  and interface feels responsive. TODO:discuss this
+            processor_tasks = [asyncio.create_task(user_session.consumer()) for _ in range(3)]
+            
             done_tasks, pending_tasks = await asyncio.wait([consumer_task, producer_task, *processor_tasks], return_when=asyncio.FIRST_COMPLETED)
-            
-            
+
             for task in pending_tasks:
                 task.cancel()
 
         finally:
-            await self.unregister(user_task)
+            await self.unregister(user_session)
 
+    async def upload_session(self, websocket):
+        user_upload_session = CuemsUpload(websocket)
+        logging.info("new upload session: {}".format(user_upload_session))
+
+        await user_upload_session.message_handler()
+        logging.info("upload session ended: {}".format(user_upload_session))
+        del user_upload_session
 
     async def register(self, user_task):
         logging.info("user registered: {}".format(id(user_task.websocket)))
@@ -131,26 +150,18 @@ class CuemsWsServer():
 
 
 class CuemsWsUser(CuemsWsServer):
-    def __init__(self, websocket, path):
+    def __init__(self, websocket):
         self.websocket = websocket
-        self.path = path
         self.incoming = asyncio.Queue()
         self.outgoing = asyncio.Queue()
         self.users[self] = None
-        self.uploading = False
-        self.filename_path = None
-        self.bytes_received = 0
-        self.filesize = 0
 
         
 
     async def consumer_handler(self):
         try:
             async for message in self.websocket:
-                if isinstance(message, str):
-                    await self.incoming.put(message)
-                else:
-                    await self.set_upload(bin_data=message)
+                await self.incoming.put(message)
         except ws.exceptions.ConnectionClosedError as e:
                 print(e)
 
@@ -184,38 +195,11 @@ class CuemsWsUser(CuemsWsServer):
                 await self.request_delete(data["value"])
             elif data["action"] == "list":
                 await self.list_projects()
-            elif data["action"] == "upload":
-                await self.set_upload(file_info=data["value"])
             else:
                 logging.error("unsupported action: {}".format(data))
                 await self.notify_error_to_user("unsupported action: {}".format(data))
 
-    async def set_upload(self, file_info=None, bin_data=None):
-            
-            if file_info is not None and bin_data is None and self.uploading is False:
-                print('getting ready to UPLOAD')
-                self.filesize = file_info['size']
-                self.filename_path = os.path.join(os.getcwd(), 'upload', file_info['name'])
-                logging.info(self.filename_path)
-                if not os.path.exists(self.filename_path):
-                    self.f = open(self.filename_path, 'wb')
-                    self.uploading = 'Ready'
-                    await self.outgoing.put(json.dumps({"ready" : True}))
-            elif file_info is None and bin_data is not None and self.uploading == 'Ready':
-                
-                    if (self.bytes_received < self.filesize):
-                        print('UPLOADING')
-                        self.f.write(bin_data)
-                        self.bytes_received += len(bin_data)
-                        await self.outgoing.put(json.dumps({"ready" : True}))
-                        print('Received {} bytes ({} total)'.format(len(bin_data), self.bytes_received))
-                    else:
-                        self.f.close()
-                        self.f = None
-                        await self.outgoing.put(json.dumps({"finished" : True}))
-                        self.uploading = False
-                        print('upload completed')
-                        await self.outgoing.put(json.dumps({"close" : True}))
+    
                     
                        
 
@@ -330,3 +314,70 @@ class CuemsWsUser(CuemsWsServer):
                 return True
 
         raise NameError
+
+class CuemsUpload(CuemsWsServer):
+    def __init__(self, websocket):
+        self.websocket = websocket
+        self.uploading = False
+        self.filename_path = None
+        self.bytes_received = 0
+        self.filesize = 0
+        self.file_handle = None
+
+    async def message_handler(self):
+        while True:
+            try:
+                message = await self.websocket.recv()
+                if isinstance(message, str):
+                    data = json.loads(message)
+                    await self.set_upload(file_info=data["value"])
+                elif isinstance(message, bytes):
+                    await self.process_upload_packet(message)
+            except ws.exceptions.ConnectionClosedError:
+                logging.debug('upload connection closed, exiting loop')
+                break
+
+    async def set_upload(self, file_info):
+            
+            
+        print('getting ready to UPLOAD')
+        self.filesize = file_info['size']
+        self.filename_path = os.path.join(os.getcwd(), 'upload', file_info['name'])
+        logging.info(self.filename_path)
+        if not os.path.exists(self.filename_path):
+            self.file_handle = open(self.filename_path, 'wb')
+            self.uploading = 'Ready'
+            await self.websocket.send(json.dumps({"ready" : True}))
+        else:
+            await self.websocket.send(json.dumps({"error" : "file allready exists"}))
+            logging.error("file allready exists")
+
+    async def process_upload_packet(self, bin_data):
+    
+        if self.uploading == 'Ready':
+                
+            if (self.bytes_received < self.filesize):
+                print('UPLOADING')
+                self.file_handle.write(bin_data)
+                self.bytes_received += len(bin_data)
+                await self.websocket.send(json.dumps({"ready" : True}))
+                print('Received {} bytes ({} total)'.format(len(bin_data), self.bytes_received))
+            else:
+                await self.websocket.send(json.dumps({"ready" : True}))
+                await self.upload_done()
+
+    async def upload_done(self):
+        try:
+            await self.websocket.send(json.dumps({"finished" : True}))
+            print('upload completed')
+            #await self.websocket.send(json.dumps({"close" : True}))
+        except Exception as e:
+            print(e)
+        finally:
+            self.file_handle.close()
+            self.uploading = False
+            self.filename_path = None
+            self.bytes_received = 0
+            self.filesize = 0
+            self.file_handle = None
+        
