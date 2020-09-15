@@ -329,17 +329,24 @@ class CuemsUpload(CuemsWsServer):
             try:
                 message = await self.websocket.recv()
                 if isinstance(message, str):
-                    data = json.loads(message)
-                    await self.set_upload(file_info=data["value"])
+                    await self.process_upload_message(message)
                 elif isinstance(message, bytes):
                     await self.process_upload_packet(message)
             except ws.exceptions.ConnectionClosedError:
                 logging.debug('upload connection closed, exiting loop')
                 break
 
+    async def process_upload_message(self, message):
+        data = json.loads(message)
+        if 'action' not in data:
+            return False
+        if data['action'] == 'upload':
+            await self.set_upload(file_info=data["value"])
+        elif data['action'] == 'finished':
+            await self.upload_done()
+
     async def set_upload(self, file_info):
-            
-            
+                
         print('getting ready to UPLOAD')
         self.filesize = file_info['size']
         self.filename_path = os.path.join(os.getcwd(), 'upload', file_info['name'])
@@ -355,22 +362,16 @@ class CuemsUpload(CuemsWsServer):
     async def process_upload_packet(self, bin_data):
     
         if self.uploading == 'Ready':
-                
-            if (self.bytes_received < self.filesize):
-                print('UPLOADING')
-                self.file_handle.write(bin_data)
-                self.bytes_received += len(bin_data)
-                await self.websocket.send(json.dumps({"ready" : True}))
-                print('Received {} bytes ({} total)'.format(len(bin_data), self.bytes_received))
-            else:
-                await self.websocket.send(json.dumps({"ready" : True}))
-                await self.upload_done()
+            print('UPLOADING')
+            self.file_handle.write(bin_data)
+            self.bytes_received += len(bin_data)
+            await self.websocket.send(json.dumps({"ready" : True}))
+            print('Received {} bytes ({} total)'.format(len(bin_data), self.bytes_received))
 
     async def upload_done(self):
         try:
-            await self.websocket.send(json.dumps({"finished" : True}))
             print('upload completed')
-            #await self.websocket.send(json.dumps({"close" : True}))
+            await self.websocket.send(json.dumps({"close" : True}))
         except Exception as e:
             print(e)
         finally:

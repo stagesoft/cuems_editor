@@ -6,17 +6,22 @@
     <link rel="stylesheet" href="http://maxcdn.bootstrapcdn.com/bootstrap/3.3.4/css/bootstrap.min.css">
     <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.11.1/jquery.min.js"></script>
     <script src="http://maxcdn.bootstrapcdn.com/bootstrap/3.3.4/js/bootstrap.min.js"></script>
+    <script src="static/scripts/criptojs/rollups/sha1.js"></script>
+    <script src='static/scripts/criptojs/components/lib-typedarrays-min.js'></script>
 
     <!-- Uploader JS and CSS -->
     <script>
-        function GalileoSend(param) {
+        
+        function FileSliceSend(param) {
+            var sha1 = CryptoJS.algo.SHA1.create();
             var ws = new WebSocket(param.url);
             var file = param.file;
             var filedata = { action: 'upload', value: { name: file.name, size: file.size }};
 
-            var chunksize = param.chunksize || 500000;
+            var chunksize = param.chunksize;
             var slice_start = 0;
-            var end = filedata.size;
+            var end = file.size;
+            console.log(end)
             var finished = false;
             var success = false;  // set to true on completion
             var error_messages = [];
@@ -25,8 +30,7 @@
 
             ws.onmessage = function (e) {
                 var status = JSON.parse(e.data);
-                console.log(status)
-                console.log(status.ready)
+
                 // got close signal
                 if (status.close) {
                     if (finished) {
@@ -56,12 +60,12 @@
                 // upload already successful, inform server
                 if (finished) {
                     console.log('sending finished')
-                    ws.send(JSON.stringify({ finished: true }));
+                    ws.send(JSON.stringify({ action: 'finished' , value: 'mdsum'}));
                     return;
                 }
 
                 // server is ready for next chunk
-                var slice_end = slice_start + (status.chunksize || chunksize);
+                var slice_end = slice_start + chunksize;
                 if (slice_end >= end) {
                     slice_end = end;
                     finished = true;
@@ -143,7 +147,8 @@
                 params.file = file;
                 params.url = "ws://localhost:9092/upload";
                 params.progressbar = progressBar;
-                GalileoSend(params);
+                params.chunksize = 500000;
+                FileSliceSend(params);
               
             }
         }
