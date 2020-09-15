@@ -148,6 +148,9 @@
                 params.url = "ws://localhost:9092/upload";
                 params.progressbar = progressBar;
                 params.chunksize = 500000;
+                params.onerror = function (status) {
+                    progressBar.text.innerHTML = "Error: " + status.error;
+                }
                 FileSliceSend(params);
               
             }
@@ -237,7 +240,7 @@
         ProgressBar.prototype.updateValue = function (value) {
             if (value == this.fileSize) {
                 this.text.innerHTML = "All " + this.fileSizeStr + " transferred.";
-                this.message.innerHTML = "You may safely close this window.";
+                this.message.innerHTML = "";
             } else {
                 var valueStr = this.numToByteString(value);
                 this.text.innerHTML = valueStr + " of " + this.fileSizeStr + " transferred.";
@@ -245,9 +248,6 @@
             }
 
             var percent = Math.floor(value / this.fileSize * 100);
-            if (percent > 100) {
-                percent = 100;
-            }
             this.bar.setAttribute("aria-valuenow", percent);
             this.bar.style.width = percent + "%";
             this.bar.innerHTML = percent + "%";

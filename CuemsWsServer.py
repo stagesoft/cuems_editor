@@ -1,7 +1,3 @@
-#!/usr/bin/env python
-
-# WS server example that synchronizes state across clients
-
 import sys
 import asyncio
 import json
@@ -11,7 +7,7 @@ import aiofiles
 import websockets as ws
 from multiprocessing import Process, Event
 import signal
-import os
+from random import randint
 from asgiref.sync import async_to_sync, sync_to_async
 
 import time
@@ -20,14 +16,14 @@ logging.basicConfig(format='Cuems:ws-server: (PID: %(process)d)-%(threadName)-9s
 
 
 class CuemsWsServer():
-    state = {"value": 0}
+    state = {"value": 0} #TODO: provisional
     users = dict()
     projects=[{"CuemsScript": {"uuid": "76861217-2d40-47a2-bdb5-8f9c91293855", "name": "Proyecto test 0", "date": "14/08/2020 11:18:16", "timecode_cuelist": {"CueList": {"Cue": [{"uuid": "bf2d217f-881d-47c1-9ad1-f5999769bcc5", "time": {"CTimecode": "00:00:33:00"}, "type": "mtc", "loop": "False", "outputs": {"CueOutputs": {"id": 5, "bla": "ble"}}}, {"uuid": "8ace53f3-74f5-4195-822e-93c12fdf3725", "time": {"NoneType": "None"}, "type": "floating", "loop": "False", "outputs": {"CueOutputs": {"physiscal": 1, "virtual": 3}}}], "AudioCue": {"uuid": "be288e38-887a-446f-8cbf-c16c9ec6724a", "time": {"CTimecode": "00:00:45:00"}, "type": "virtual", "loop": "True", "outputs": {"AudioCueOutputs": {"stereo": 1}}}}}, "floating_cuelist": {"CueList": {"DmxCue": {"uuid": "f36fa4b3-e220-4d75-bff1-210e14655c11", "time": {"CTimecode": "00:00:23:00"}, "dmx_scene": {"DmxScene": {"DmxUniverse": [{"id": 0, "DmxChannel": [{"id": 0, "&": 10}, {"id": 1, "&": 50}]}, {"id": 1, "DmxChannel": [{"id": 20, "&": 23}, {"id": 21, "&": 255}]}, {"id": 2, "DmxChannel": [{"id": 5, "&": 10}, {"id": 6, "&": 23}, {"id": 7, "&": 125}, {"id": 8, "&": 200}]}]}}, "outputs": {"DmxCueOutputs": {"universe0": 3}}}, "Cue": {"uuid": "17376d8f-84c6-4f28-859a-a01260a1dadb", "time": {"CTimecode": "00:00:05:00"}, "type": "virtual", "loop": "False", "outputs": {"CueOutputs": {"id": 3}}}}}}}, {"CuemsScript": {"uuid": "e05de59a-b281-4abf-83ba-97198d661a63", "name": "Segundo proyecto", "date": "13/08/2020 07:23:12", "timecode_cuelist": {"CueList": {"Cue": [{"uuid": "d47a75e2-f76e-4c77-b33e-e1df40ffdf02", "time": {"CTimecode": "00:00:33:00"}, "type": "mtc", "loop": "False", "outputs": {"CueOutputs": {"id": 5, "bla": "ble"}}}, {"uuid": "b5c35e3d-91f6-42d8-9825-0176354b44c1", "time": {"NoneType": "None"}, "type": "floating", "loop": "False", "outputs": {"CueOutputs": {"physiscal": 1, "virtual": 3}}}], "AudioCue": {"uuid": "aef5e289-03b0-4b39-99cd-90063d9b8c80", "time": {"CTimecode": "00:00:45:00"}, "type": "virtual", "loop": "True", "outputs": {"AudioCueOutputs": {"stereo": 1}}}}}, "floating_cuelist": {"CueList": {"DmxCue": {"uuid": "5d4ef443-5a49-4986-a283-9563ee7a9e85", "time": {"CTimecode": "00:00:23:00"}, "dmx_scene": {"DmxScene": {"DmxUniverse": [{"id": 0, "DmxChannel": [{"id": 0, "&": 10}, {"id": 1, "&": 50}]}, {"id": 1, "DmxChannel": [{"id": 20, "&": 23}, {"id": 21, "&": 255}]}, {"id": 2, "DmxChannel": [{"id": 5, "&": 10}, {"id": 6, "&": 23}, {"id": 7, "&": 125}, {"id": 8, "&": 200}]}]}}, "outputs": {"DmxCueOutputs": {"universe0": 3}}}, "Cue": {"uuid": "37f80125-1c41-4cce-aab1-13328dd8c94e", "time": {"CTimecode": "00:00:05:00"}, "type": "virtual", "loop": "False", "outputs": {"CueOutputs": {"id": 3}}}}}}}]
 
     def __init__(self):
         
         self.event_loop = asyncio.new_event_loop()
-        self.event_loop.set_exception_handler(self.exception_handler)
+        #self.event_loop.set_exception_handler(self.exception_handler) ### TODO:UNCOMENT FOR PRODUCTION 
         self.event = Event()
         self.process = Process(target=self.run_async_server, args=(self.event,))
         
@@ -172,7 +168,7 @@ class CuemsWsUser(CuemsWsServer):
             async for message in self.websocket:
                 await self.incoming.put(message)
         except ws.exceptions.ConnectionClosedError as e:
-                print(e)
+                logging.debug(e)
 
     async def producer_handler(self):
         while True:
@@ -180,7 +176,7 @@ class CuemsWsUser(CuemsWsServer):
             try:
                 await self.websocket.send(message)
             except ws.exceptions.ConnectionClosedError as e:
-                print(e)
+                logging.debug(e)
                 break
 
     async def consumer(self):
@@ -230,8 +226,8 @@ class CuemsWsUser(CuemsWsServer):
             project_list = await self.load_project_list()    
             await self.outgoing.put(json.dumps({"type": "list", "value": project_list}))
         except Exception as e:
-            print("error loading project list")
-            print("error: {} {}".format(type(e), e))
+            logging.debug("error loading project list")
+            logging.error("error: {} {}".format(type(e), e))
             await self.notify_error_to_user('error loading project list')
 
     async def send_project(self, project_uuid):
@@ -245,8 +241,8 @@ class CuemsWsUser(CuemsWsServer):
             await self.notify_user("project loaded")
             self.users[self] = project_uuid
         except Exception as e:
-            print("error loading project")
-            print("error: {} {}".format(type(e), e))
+            logging.debug("error loading project")
+            logging.error("error: {} {}".format(type(e), e))
             await self.notify_error_to_user('error loading project')
 
     async def received_project(self, data):
@@ -261,8 +257,8 @@ class CuemsWsUser(CuemsWsServer):
             await self.notify_user("{} project saved".format(return_message))
             await self.notify_others(self, "changes")
         except Exception as e:
-            print("error saving project")
-            print("error: {} {}".format(type(e), e))
+            logging.debug("error saving project")
+            logging.error("error: {} {}".format(type(e), e))
             await self.notify_error_to_user('error saving project')
 
     async def request_delete(self, project_uuid):
@@ -275,8 +271,8 @@ class CuemsWsUser(CuemsWsServer):
                 await self.notify_user("project {} deleted".format(project_uuid))
                 await self.notify_others(self, "changes", project_uuid=project_uuid)
         except Exception as e:
-            print("error deleting project")
-            print("error: {} {}".format(type(e), e))
+            logging.debug("error deleting project")
+            logging.error("error: {} {}".format(type(e), e))
             await self.notify_error_to_user('error deleting project')
 
 
@@ -286,11 +282,11 @@ class CuemsWsUser(CuemsWsServer):
     def load_project_list(self):
         logging.info("loading project list")
         project_list = list()
-        for project in self.projects:
+        for project in self.projects: #TODO: provisional
             try:
                 project_list.append({project['CuemsScript']['uuid']:{"name":project['CuemsScript']['name'], "date":project['CuemsScript']['date']}})
             except:
-                print('malformed project')
+                logging.debug('malformed project')
         return project_list
 
     @sync_to_async # call blocking function asynchronously (gets a thread)
@@ -324,14 +320,17 @@ class CuemsWsUser(CuemsWsServer):
 
         raise NameError
 
-class CuemsUpload(CuemsWsServer):
+class CuemsUpload():
     def __init__(self, websocket):
         self.websocket = websocket
+        self.upload_forlder_path = os.path.join(os.getcwd(), 'upload')     #TODO: get folder path from settings or constant
         self.uploading = False
-        self.filename_path = None
+        self.filename = None
+        self.tmp_filename = None
         self.bytes_received = 0
         self.filesize = 0
         self.file_handle = None
+        
 
     async def message_handler(self):
         while True:
@@ -355,38 +354,61 @@ class CuemsUpload(CuemsWsServer):
             await self.upload_done()
 
     async def set_upload(self, file_info):
-                
-        print('getting ready to UPLOAD')
-        self.filesize = file_info['size']
-        self.filename_path = os.path.join(os.getcwd(), 'upload', file_info['name'])
-        logging.info(self.filename_path)
-        if not os.path.exists(self.filename_path):
-            self.file_handle = open(self.filename_path, 'wb')
+        
+        
+        if not os.path.exists(self.upload_forlder_path):
+            logging.error("upload folder doenst exists")
+            await self.websocket.send(json.dumps({'error' : 'upload folder doenst exist', 'fatal': True}))
+            return False
+        
+        self.filename = file_info['name']
+        self.tmp_filename = self.filename + '.tmp' + str(randint(100000, 999999))
+        tmp_path = os.path.join(self.upload_forlder_path, self.tmp_filename )
+        logging.debug('tmp upload path: {}'.format(tmp_path))
+
+        if not os.path.exists(tmp_path):
+            self.filesize = file_info['size']
+            self.file_handle = open(tmp_path, 'wb')
             self.uploading = 'Ready'
             await self.websocket.send(json.dumps({"ready" : True}))
         else:
-            await self.websocket.send(json.dumps({"error" : "file allready exists"}))
+            await self.websocket.send(json.dumps({'error' : 'file allready exists', 'fatal': True}))
             logging.error("file allready exists")
 
     async def process_upload_packet(self, bin_data):
     
         if self.uploading == 'Ready':
-            print('UPLOADING')
             self.file_handle.write(bin_data)
             self.bytes_received += len(bin_data)
             await self.websocket.send(json.dumps({"ready" : True}))
-            print('Received {} bytes ({} total)'.format(len(bin_data), self.bytes_received))
 
     async def upload_done(self):
+        self.file_handle.close()
         try:
-            print('upload completed')
+            tmp_path = os.path.join(self.upload_forlder_path, self.tmp_filename )
+            dest_path = os.path.join(self.upload_forlder_path, self.filename)
+            
+            while True:
+                i = 0
+                if not os.path.exists(dest_path):
+                    os.rename(tmp_path, dest_path)
+                    break
+                else:
+                    i += 1
+                    (base, ext) = os.path.splitext(self.filename)
+                    increment_filename = base + str(i) + ext
+                    dest_path = os.path.join(self.upload_forlder_path, increment_filename)
+                    continue
+
+            logging.debug('upload completed')
             await self.websocket.send(json.dumps({"close" : True}))
         except Exception as e:
-            print(e)
+            logging.error(e)
+            await self.websocket.send(json.dumps({'error' : 'error saving file', 'fatal': True}))
         finally:
-            self.file_handle.close()
             self.uploading = False
             self.filename_path = None
+            self.tmp_filename_path = None
             self.bytes_received = 0
             self.filesize = 0
             self.file_handle = None
