@@ -1,5 +1,6 @@
 import sys
 import asyncio
+import concurrent.futures
 import json
 import logging
 import os
@@ -8,7 +9,6 @@ import websockets as ws
 from multiprocessing import Process, Event
 import signal
 from random import randint
-from asgiref.sync import async_to_sync, sync_to_async
 
 import time
 
@@ -32,6 +32,7 @@ class CuemsWsServer():
         self.port = port
         self.host = 'localhost'
         self.process.start()
+
         
 
     def run_async_server(self, event):
@@ -53,8 +54,7 @@ class CuemsWsServer():
         self.event_loop.call_soon_threadsafe(self.project_server.ws_server.close)
         logging.info('ws server closing')
         asyncio.run_coroutine_threadsafe(self.stop_async(), self.event_loop)
-        
-        
+              
 
     async def stop_async(self):
         await self.project_server.ws_server.wait_closed()
@@ -160,7 +160,8 @@ class CuemsWsUser(CuemsWsServer):
         self.incoming = asyncio.Queue()
         self.outgoing = asyncio.Queue()
         self.users[self] = None
-
+        self.event_loop = asyncio.get_running_loop()
+        self.executor =  concurrent.futures.ThreadPoolExecutor(thread_name_prefix='ws_load_ThreadPoolExecutor', max_workers=2) # TODO: move to server init and create 3 ?
         
 
     async def consumer_handler(self):
@@ -175,9 +176,10 @@ class CuemsWsUser(CuemsWsServer):
             message = await self.producer()
             try:
                 await self.websocket.send(message)
-            except ws.exceptions.ConnectionClosedError as e:
+            except (ws.exceptions.ConnectionClosed, ws.exceptions.ConnectionClosedOK, ws.exceptions.ConnectionClosedError) as e:
                 logging.debug(e)
                 break
+
 
     async def consumer(self):
         while True: 
@@ -223,7 +225,7 @@ class CuemsWsUser(CuemsWsServer):
     async def list_projects(self):
         logging.info("user {} loading project list".format(id(self.websocket)))
         try:
-            project_list = await self.load_project_list()    
+            project_list = await self.event_loop.run_in_executor(self.executor, self.load_project_list)    
             await self.outgoing.put(json.dumps({"type": "list", "value": project_list}))
         except Exception as e:
             logging.debug("error loading project list")
@@ -235,7 +237,7 @@ class CuemsWsUser(CuemsWsServer):
             if project_uuid == '':
                 raise NameError
             logging.info("user {} loading project {}".format(id(self.websocket), project_uuid))
-            project = await self.load_project(project_uuid)
+            project = await self.event_loop.run_in_executor(self.executor, self.load_project, project_uuid)
             msg = json.dumps({"type":"project", "value":json.dumps(project)})
             await self.outgoing.put(msg)
             await self.notify_user("project loaded")
@@ -252,7 +254,7 @@ class CuemsWsUser(CuemsWsServer):
 
             logging.info("user {} saving project {}".format(id(self.websocket), project_uuid))
             
-            return_message = await self.save_project(project_uuid, project)
+            return_message = await self.event_loop.run_in_executor(self.executor, self.save_project, project_uuid, project)
             self.users[self] = project_uuid
             await self.notify_user("{} project saved".format(return_message))
             await self.notify_others(self, "changes")
@@ -265,7 +267,7 @@ class CuemsWsUser(CuemsWsServer):
         try:
             logging.info("user {} deleting project: {}".format(id(self.websocket), project_uuid))
             
-            if (await self.delete_project(project_uuid)):
+            if (await self.event_loop.run_in_executor(self.executor, self.delete_project,project_uuid)):
 
                 # self.users[self] = None  #TODO:what is now the active project? deleted project was the active one?
                 await self.notify_user("project {} deleted".format(project_uuid))
@@ -278,7 +280,7 @@ class CuemsWsUser(CuemsWsServer):
 
 
 
-    @sync_to_async # call blocking function asynchronously (gets a thread)
+    # call blocking functions asynchronously with run_in_executor ThreadPoolExecutor
     def load_project_list(self):
         logging.info("loading project list")
         project_list = list()
@@ -289,7 +291,7 @@ class CuemsWsUser(CuemsWsServer):
                 logging.debug('malformed project')
         return project_list
 
-    @sync_to_async # call blocking function asynchronously (gets a thread)
+    
     def load_project(self, project):
         logging.info("loading project: {}".format(project))
         for elem in self.projects:
@@ -298,7 +300,6 @@ class CuemsWsUser(CuemsWsServer):
                 return elem
         raise NameError
 
-    @sync_to_async
     def save_project(self, uuid, data):
         logging.info("loading project: {}".format(uuid))
         logging.debug('saving project, uuid:{}, data:{}'.format(uuid, data))
@@ -310,7 +311,6 @@ class CuemsWsUser(CuemsWsServer):
         self.projects.append(data)
         return 'new'
 
-    @sync_to_async
     def delete_project(self, uuid):
         logging.info('deleting project, uuid:{}'.format(uuid))
         for num, elem in enumerate(self.projects):
@@ -387,9 +387,8 @@ class CuemsUpload():
         try:
             tmp_path = os.path.join(self.upload_forlder_path, self.tmp_filename )
             dest_path = os.path.join(self.upload_forlder_path, self.filename)
-            
-            while True:
-                i = 0
+            i = 0
+            while True:     
                 if not os.path.exists(dest_path):
                     os.rename(tmp_path, dest_path)
                     break
@@ -398,6 +397,7 @@ class CuemsUpload():
                     (base, ext) = os.path.splitext(self.filename)
                     increment_filename = base + str(i) + ext
                     dest_path = os.path.join(self.upload_forlder_path, increment_filename)
+                    print(dest_path)
                     continue
 
             logging.debug('upload completed')
