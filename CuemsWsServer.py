@@ -241,14 +241,13 @@ class CuemsWsUser():
             project_list = await self.server.event_loop.run_in_executor(self.server.executor, self.load_project_list)    
             await self.outgoing.put(json.dumps({"type": "list", "value": project_list}))
         except Exception as e:
-            logging.debug("error loading project list")
             logging.error("error: {} {}".format(type(e), e))
             await self.notify_error_to_user('error loading project list')
 
     async def send_project(self, project_uuid):
         try:
             if project_uuid == '':
-                raise NameError
+                raise NonExistentItemError('project uuid is empty')
             logging.info("user {} loading project {}".format(id(self.websocket), project_uuid))
             project = await self.server.event_loop.run_in_executor(self.server.executor, self.load_project, project_uuid)
             msg = json.dumps({"type":"project", "value":json.dumps(project)})
@@ -256,7 +255,6 @@ class CuemsWsUser():
             await self.notify_user("project loaded")
             self.server.users[self] = project_uuid
         except Exception as e:
-            logging.debug("error loading project")
             logging.error("error: {} {}".format(type(e), e))
             await self.notify_error_to_user('error loading project')
 
@@ -272,7 +270,6 @@ class CuemsWsUser():
             await self.notify_user("{} project saved".format(return_message))
             await self.server.notify_others(self, "changes")
         except Exception as e:
-            logging.debug("error saving project")
             logging.error("error: {} {}".format(type(e), e))
             await self.notify_error_to_user('error saving project')
 
@@ -280,13 +277,12 @@ class CuemsWsUser():
         try:
             logging.info("user {} deleting project: {}".format(id(self.websocket), project_uuid))
             
-            if (await self.server.event_loop.run_in_executor(self.server.executor, self.delete_project,project_uuid)):
+            await self.server.event_loop.run_in_executor(self.server.executor, self.delete_project,project_uuid)
 
-                # self.users[self] = None  #TODO:what is now the active project? deleted project was the active one?
-                await self.notify_user("project {} deleted".format(project_uuid))
-                await self.server.notify_others(self, "changes", project_uuid=project_uuid)
+            # self.users[self] = None  #TODO:what is now the active project? deleted project was the active one?
+            await self.notify_user("project {} deleted".format(project_uuid))
+            await self.server.notify_others(self, "changes", project_uuid=project_uuid)
         except Exception as e:
-            logging.debug("error deleting project")
             logging.error("error: {} {}".format(type(e), e))
             await self.notify_error_to_user('error deleting project')
 
@@ -301,7 +297,7 @@ class CuemsWsUser():
             try:
                 project_list.append({project['CuemsScript']['uuid']:{"name":project['CuemsScript']['name'], "date":project['CuemsScript']['date']}})
             except:
-                logging.debug('malformed project')
+                raise NonExistentItemError('malformed project')
         return project_list
 
     
@@ -311,7 +307,7 @@ class CuemsWsUser():
             if elem['CuemsScript']['uuid'] == project:
                 logging.debug("loading project: {}".format(elem))
                 return elem
-        raise NameError
+        raise NonExistentItemError('Can not find project uuid for loading')
 
     def save_project(self, uuid, data):
         logging.info("loading project: {}".format(uuid))
@@ -331,7 +327,7 @@ class CuemsWsUser():
                 del self.server.projects[num]
                 return True
 
-        raise NameError
+        raise NonExistentItemError('Can not find project uuid for deletion')
 
 class CuemsUpload():
 
@@ -428,7 +424,7 @@ class CuemsUpload():
             logging.debug('upload completed')
             await self.message_sender(json.dumps({"close" : True}))
         except Exception as e:
-            logging.error(e)
+            logging.error("error: {} {}".format(type(e), e))
             await self.message_sender(json.dumps({'error' : 'error saving file', 'fatal': True}))
 
     def check_file_integrity(self, path, original_md5):
@@ -448,6 +444,9 @@ class CuemsUpload():
             pass
         
 
-
-class FileIntegrityError(Exception):
+class CuemsWsServerError(Exception):
+    pass
+class FileIntegrityError(CuemsWsServerError):
+    pass
+class NonExistentItemError(CuemsWsServerError):
     pass
