@@ -4,11 +4,12 @@ import concurrent.futures
 import json
 import logging
 import os
-import aiofiles
+#import aiofiles
 import websockets as ws
 from multiprocessing import Process, Event
 import signal
 from random import randint
+from hashlib import md5
 
 import time
 
@@ -20,7 +21,7 @@ formatter = logging.Formatter('Cuems:ws-server: (PID: %(process)d)-%(threadName)
 stream.setFormatter(formatter)
 
 logger_ws_server = logging.getLogger()
-logger_ws_server.setLevel(logging.INFO)
+logger_ws_server.setLevel(logging.DEBUG)
 logger_ws_server.addHandler(stream)
 
 logger_asyncio = logging.getLogger('asyncio')
@@ -110,7 +111,6 @@ class CuemsWsServer():
 
         await user_upload_session.message_handler()
         logging.info("upload session ended: {}".format(user_upload_session))
-        del user_upload_session
 
     async def register(self, user_task):
         logging.info("user registered: {}".format(id(user_task.websocket)))
@@ -372,7 +372,7 @@ class CuemsUpload():
         if data['action'] == 'upload':
             await self.set_upload(file_info=data["value"])
         elif data['action'] == 'finished':
-            await self.upload_done()
+            await self.upload_done('80eb4fd64124c5cab0ebf560f84a9bfa')
 
     async def set_upload(self, file_info):
         
@@ -403,11 +403,15 @@ class CuemsUpload():
             self.bytes_received += len(bin_data)
             await self.message_sender(json.dumps({"ready" : True}))
 
-    async def upload_done(self):
+    async def upload_done(self, received_md5):
         self.file_handle.close()
         try:
+            
             tmp_path = os.path.join(self.upload_forlder_path, self.tmp_filename )
             dest_path = os.path.join(self.upload_forlder_path, self.filename)
+            
+            await self.server.event_loop.run_in_executor(self.server.executor, self.check_file_integrity, tmp_path, received_md5)
+
             i = 0
             while True:     
                 if not os.path.exists(dest_path):
@@ -426,11 +430,24 @@ class CuemsUpload():
         except Exception as e:
             logging.error(e)
             await self.message_sender(json.dumps({'error' : 'error saving file', 'fatal': True}))
-        finally:
-            self.uploading = False
-            self.filename_path = None
-            self.tmp_filename_path = None
-            self.bytes_received = 0
-            self.filesize = 0
-            self.file_handle = None
+
+    def check_file_integrity(self, path, original_md5):
+        with open(path, 'rb') as file_to_check:
+            data = file_to_check.read()    
+            returned_md5 = md5(data).hexdigest()
+        if original_md5 != returned_md5:
+            raise FileIntegrityError('MD5 mistmatch')
+        return True
+
+    def __del__(self):
+        try:
+            tmp_path = os.path.join(self.upload_forlder_path, self.tmp_filename)
+            os.remove(tmp_path)  # TODO: change to pathlib ?  
+            logging.debug('cleaning tmp upload file on object destruction: ({})'.format(tmp_path))
+        except FileNotFoundError:
+            pass
         
+
+
+class FileIntegrityError(Exception):
+    pass
