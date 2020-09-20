@@ -4,7 +4,7 @@ import concurrent.futures
 import json
 import logging
 import os
-#import aiofiles
+import aiofiles
 import websockets as ws
 from multiprocessing import Process, Event
 import signal
@@ -49,9 +49,9 @@ class CuemsWsServer():
     def run_async_server(self, event):
         self.event_loop = asyncio.new_event_loop()
         asyncio.set_event_loop(self.event_loop)
-        self.executor =  concurrent.futures.ThreadPoolExecutor(thread_name_prefix='ws_load_ThreadPoolExecutor', max_workers=3) # TODO: adjust max workers
+        self.executor =  concurrent.futures.ThreadPoolExecutor(thread_name_prefix='ws_load_ThreadPoolExecutor', max_workers=5) # TODO: adjust max workers
         #self.event_loop.set_exception_handler(self.exception_handler) ### TODO:UNCOMENT FOR PRODUCTION 
-        self.project_server = ws.serve(self.connection_handler, self.host, self.port, max_size=None)
+        self.project_server = ws.serve(self.connection_handler, self.host, self.port, max_size=None) #TODO: choose max packets size from ui and limit it here
         for sig in (signal.SIGINT, signal.SIGTERM):
             self.event_loop.add_signal_handler(sig, self.ask_exit)
         logging.info('server listening on {}, port {}'.format(self.host, self.port))
@@ -334,6 +334,7 @@ class CuemsUpload():
     uploading = False
     filename = None
     tmp_filename = None
+    tmp_path = None
     bytes_received = 0
     filesize = 0
     file_handle = None
@@ -372,7 +373,6 @@ class CuemsUpload():
 
     async def set_upload(self, file_info):
         
-        
         if not os.path.exists(self.upload_forlder_path):
             logging.error("upload folder doenst exists")
             await self.message_sender(json.dumps({'error' : 'upload folder doenst exist', 'fatal': True}))
@@ -380,12 +380,11 @@ class CuemsUpload():
         
         self.filename = file_info['name']
         self.tmp_filename = self.filename + '.tmp' + str(randint(100000, 999999))
-        tmp_path = os.path.join(self.upload_forlder_path, self.tmp_filename )
-        logging.debug('tmp upload path: {}'.format(tmp_path))
+        self.tmp_path = os.path.join(self.upload_forlder_path, self.tmp_filename )
+        logging.debug('tmp upload path: {}'.format(self.tmp_path))
 
-        if not os.path.exists(tmp_path):
+        if not os.path.exists(self.tmp_path):
             self.filesize = file_info['size']
-            self.file_handle = open(tmp_path, 'wb')
             self.uploading = 'Ready'
             await self.message_sender(json.dumps({"ready" : True}))
         else:
@@ -393,26 +392,37 @@ class CuemsUpload():
             logging.error("file allready exists")
 
     async def process_upload_packet(self, bin_data):
-    
+
         if self.uploading == 'Ready':
-            self.file_handle.write(bin_data)
-            self.bytes_received += len(bin_data)
-            await self.message_sender(json.dumps({"ready" : True}))
+            async with aiofiles.open(self.tmp_path, mode='wb', loop=self.server.event_loop, executor=self.server.executor) as stream:
+                await stream.write(bin_data)
+                self.bytes_received += len(bin_data)
+                await self.message_sender(json.dumps({"ready" : True}))
+
+                while True:
+                    message = await self.websocket.recv()
+                    if isinstance(message, bytes):
+                        await stream.write(message)
+                        self.bytes_received += len(message)
+                        logging.debug('writing {} bytes, received {} bytes'.format(len(message), self.bytes_received))
+                        await self.message_sender(json.dumps({"ready" : True}))
+                    else:
+                        await self.process_upload_message(message)
+                        break
+
 
     async def upload_done(self, received_md5):
-        self.file_handle.close()
         try:
             
-            tmp_path = os.path.join(self.upload_forlder_path, self.tmp_filename )
             dest_path = os.path.join(self.upload_forlder_path, self.filename)
             
-            await self.server.event_loop.run_in_executor(self.server.executor, self.check_file_integrity, tmp_path, received_md5)
+            await self.server.event_loop.run_in_executor(self.server.executor, self.check_file_integrity,  self.tmp_path, received_md5)
 
             i = 0
             while True:     
                 if not os.path.exists(dest_path):
                     logging.info('new file uploaded, saving to: {}'.format(dest_path))
-                    os.rename(tmp_path, dest_path)
+                    os.rename( self.tmp_path, dest_path)
                     break
                 else:
                     i += 1
@@ -437,9 +447,8 @@ class CuemsUpload():
 
     def __del__(self):
         try:
-            tmp_path = os.path.join(self.upload_forlder_path, self.tmp_filename)
-            os.remove(tmp_path)  # TODO: change to pathlib ?  
-            logging.debug('cleaning tmp upload file on object destruction: ({})'.format(tmp_path))
+            os.remove(self.tmp_path)  # TODO: change to pathlib ?  
+            logging.debug('cleaning tmp upload file on object destruction: ({})'.format(self.tmp_path))
         except FileNotFoundError:
             pass
         
