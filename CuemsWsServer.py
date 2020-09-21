@@ -15,6 +15,7 @@ from hashlib import md5
 import time
 
 from CuemsProjectManager import CuemsMedia
+from CuemsErrors import *
 
 
 
@@ -226,11 +227,13 @@ class CuemsWsUser():
             elif data["action"] == "save_project":
                 await self.received_project(data["value"])
             elif data["action"] == "delete_project":
-                await self.request_delete(data["value"])
+                await self.request_delete_project(data["value"])
             elif data["action"] == "list_projects":
                 await self.list_projects()
             elif data["action"] == "list_files":
                 await self.list_files()
+            elif data["action"] == "delete_file":
+                await self.request_delete_file(data["value"])
             else:
                 logging.error("unsupported action: {}".format(data))
                 await self.notify_error_to_user("unsupported action: {}".format(data))
@@ -289,11 +292,11 @@ class CuemsWsUser():
             logging.error("error: {} {}".format(type(e), e))
             await self.notify_error_to_user('error saving project')
 
-    async def request_delete(self, project_uuid):
+    async def request_delete_project(self, project_uuid):
         try:
             logging.info("user {} deleting project: {}".format(id(self.websocket), project_uuid))
             
-            await self.server.event_loop.run_in_executor(self.server.executor, self.delete_project,project_uuid)
+            await self.server.event_loop.run_in_executor(self.server.executor, self.delete_project, project_uuid)
 
             # self.users[self] = None  #TODO:what is now the active project? deleted project was the active one?
             await self.notify_user("project {} deleted".format(project_uuid))
@@ -312,7 +315,17 @@ class CuemsWsUser():
             await self.notify_error_to_user('error loading file list')
 
 
+    async def request_delete_file(self, file_uuid):
+        try:
+            logging.debug("user {} deleting file: {}".format(id(self.websocket), file_uuid))
+            
+            await self.server.event_loop.run_in_executor(self.server.executor, self.delete_file, file_uuid)
 
+            # self.users[self] = None  #TODO:what is now the active project? deleted project was the active one?
+            await self.notify_user("file {} deleted".format(file_uuid))
+        except Exception as e:
+            logging.error("error: {} {}".format(type(e), e))
+            await self.notify_error_to_user('error deleting file')
 
     # call blocking functions asynchronously with run_in_executor ThreadPoolExecutor
     def load_project_list(self):
@@ -357,6 +370,9 @@ class CuemsWsUser():
     def load_file_list(self):
         logging.info("loading project list")
         return CuemsMedia.list()
+
+    def delete_file(self, uuid):
+        CuemsMedia.delete(uuid)
 
 class CuemsUpload():
 
@@ -458,7 +474,7 @@ class CuemsUpload():
                     self.filename = base + str(i) + ext
                     continue
             
-            await self.server.event_loop.run_in_executor(self.server.executor, CuemsMedia,  self.filename)
+            await self.server.event_loop.run_in_executor(self.server.executor, CuemsMedia.new,  self.filename)
             logging.debug('upload completed')
             await self.message_sender(json.dumps({"close" : True}))
         except Exception as e:
@@ -495,11 +511,3 @@ class CuemsUpload():
                 logging.debug('cleaning tmp upload file on object destruction: ({})'.format(self.tmp_file_path()))
         except FileNotFoundError:
             pass
-        
-
-class CuemsWsServerError(Exception):
-    pass
-class FileIntegrityError(CuemsWsServerError):
-    pass
-class NonExistentItemError(CuemsWsServerError):
-    pass

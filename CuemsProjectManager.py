@@ -73,12 +73,17 @@ class ProjectMedia(BaseModel):
 db.create_tables([Project, Media, ProjectMedia])
 
 class CuemsMedia():
-
-    def __init__(self, filename):
-        self.media = Media.create(uuid=uuid.uuid1(), unix_name=filename, created=now_formated(), modified=now_formated())
     
-    @classmethod
-    def list(cls):
+    upload_forlder_path = os.path.join(os.getcwd(), 'upload')     #TODO: get upload folder path from settings?
+    
+    
+    
+    @staticmethod
+    def new(filename):
+        Media.create(uuid=uuid.uuid1(), unix_name=filename, created=now_formated(), modified=now_formated())
+
+    @staticmethod
+    def list():
         media_list = list()
         lst = [Media.uuid, Media.name, Media.unix_name, Media.created, Media.modified]
         medias = Media.select(*lst)
@@ -87,6 +92,19 @@ class CuemsMedia():
             media_list.append(media_dict)
 
         return media_list
+
+    @staticmethod
+    def delete(uuid):
+        media = Media.get(Media.uuid==uuid)
+        with db.atomic() as transaction:
+            try:
+                file_path = os.path.join(CuemsMedia.upload_forlder_path, media.unix_name)
+                os.remove(file_path)
+                media.delete_instance()
+            except Exception as e:
+                logging.error("error: {} {} triying to delete file, rolling back database delete".format(type(e), e))
+                transaction.rollback()
+                raise e
 
 class CuemsProject():
     def __init__(self):
