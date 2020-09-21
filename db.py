@@ -21,8 +21,8 @@ class BaseModel(Model):
 
 class Project(BaseModel):
     uuid = UUIDField(index = True, unique = True, primary_key = True)
-    name = CharField()
-    unix_name = CharField( null = True )
+    name = CharField( null = True )
+    unix_name = CharField()
     created = DateTimeField()
     modified = DateTimeField()
 
@@ -36,8 +36,8 @@ class Project(BaseModel):
 
 class Media(BaseModel):
     uuid = UUIDField(index = True, unique = True, primary_key = True)
-    name = CharField()
-    unix_name = CharField( null = True )
+    name = CharField( null = True )
+    unix_name = CharField()
     created = DateTimeField()
     modified = DateTimeField()
 
@@ -74,10 +74,10 @@ class ProjectMedia(BaseModel):
 
 
 
-
+db.create_tables([Project, Media, ProjectMedia])
 
 def populate_db():
-    db.create_tables([Project, Media, ProjectMedia])
+    
 
     p1 = Project.create(uuid=uuid.uuid1(), name='Proyecto 1', created=now_formated(), modified=now_formated())
     time.sleep(random.randrange(10))
@@ -117,7 +117,7 @@ def delete_missing_refs():
 
 #p1.save(force_insert = True)
 
-db.connect()
+#db.connect()
 
 #populate_db()
 

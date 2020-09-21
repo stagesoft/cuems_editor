@@ -6,14 +6,15 @@
     <link rel="stylesheet" href="http://maxcdn.bootstrapcdn.com/bootstrap/3.3.4/css/bootstrap.min.css">
     <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.11.1/jquery.min.js"></script>
     <script src="http://maxcdn.bootstrapcdn.com/bootstrap/3.3.4/js/bootstrap.min.js"></script>
-    <script src="static/scripts/criptojs/rollups/sha1.js"></script>
+    <script src="static/scripts/criptojs/rollups/md5.js"></script>
     <script src='static/scripts/criptojs/components/lib-typedarrays-min.js'></script>
 
     <!-- Uploader JS and CSS -->
     <script>
         
         function FileSliceSend(param) {
-            var sha1 = CryptoJS.algo.SHA1.create();
+            var md5 = CryptoJS.algo.MD5.create();
+            var reader = new FileReader();
             var ws = new WebSocket(param.url);
             var file = param.file;
             var filedata = { action: 'upload', value: { name: file.name, size: file.size }};
@@ -27,6 +28,11 @@
             var error_messages = [];
 
             ws.onopen = function () { ws.send(JSON.stringify(filedata)) };
+
+            reader.onload = function(event) {
+                ws.send(event.target.result);
+                md5.update(CryptoJS.lib.WordArray.create(event.target.result));
+            }
 
             ws.onmessage = function (e) {
                 var status = JSON.parse(e.data);
@@ -60,7 +66,11 @@
                 // upload already successful, inform server
                 if (finished) {
                     console.log('sending finished')
-                    ws.send(JSON.stringify({ action: 'finished' , value: 'mdsum'}));
+                    var hash = md5.finalize();
+                    console.log(hash)
+                    var hashHex = hash.toString(CryptoJS.enc.Hex);
+                    console.log(hashHex)
+                    ws.send(JSON.stringify({ action: 'finished' , value: hashHex}));
                     return;
                 }
 
@@ -70,7 +80,9 @@
                     slice_end = end;
                     finished = true;
                 }
-                ws.send(file.slice(slice_start, slice_end));
+                chunk = file.slice(slice_start, slice_end);
+                reader.readAsArrayBuffer(chunk);
+                
                 if (param.onchunk) {
                     param.onchunk(slice_end / end);  // send ratio completed
                 }
@@ -100,10 +112,8 @@
         }
         /////////////////////////
         function Uploader(id) {
-            this.CHUNK_SIZE = 1024 * 1024;  // Read 1MB chunks
             this.mainDiv = document.getElementById(id);
-            this.reader = new FileReader();
-            // this.reader.error = ;  TODO(robinjia): set this.
+
         }
 
         Uploader.prototype.render = function () {
@@ -310,6 +320,8 @@
 
         .value {
             min-width: 2em;
+            font-size: 9pt;
+            width: 50%;
         }
 
         .state {
@@ -359,10 +371,11 @@
 <body>
     <div class="buttons">
         <div class="minus button">-</div>
-        <div class="value">?</div>
+        <div class="" id="count">?</div>
         <div class="plus button">+</div>
     </div>
     <div class="load list button" id='list'>Load project list</div>
+    <div class="load list button" id='list_files'>Load file list</div>
     <div class="buttons2">
         <div class="load button" id='load'>Load</div>
 
@@ -392,9 +405,10 @@
     <script>
         var minus = document.querySelector('.minus'),
             plus = document.querySelector('.plus'),
-            value = document.querySelector('.value'),
+            value = document.querySelector('#count'),
             users = document.querySelector('.users'),
             list = document.querySelector('#list')
+            list_files = document.querySelector('#list_files')
         load = document.querySelector('#load'),
             save = document.querySelector('#save'),
             content = document.querySelector('#content'),
@@ -410,14 +424,17 @@
             websocket.send(JSON.stringify({ action: 'plus' }));
         }
         list.onclick = function (event) {
-            websocket.send(JSON.stringify({ action: 'list' }));
+            websocket.send(JSON.stringify({ action: 'list_projects' }));
+        }
+        list_files.onclick = function (event) {
+            websocket.send(JSON.stringify({ action: 'list_files' }));
         }
         load.onclick = function (event) {
             //  websocket.send(JSON.stringify({action: 'load', value: project_id.value}));
-            websocket.send(JSON.stringify({ action: 'load', value: '76861217-2d40-47a2-bdb5-8f9c91293855' }));
+            websocket.send(JSON.stringify({ action: 'load_project', value: '76861217-2d40-47a2-bdb5-8f9c91293855' }));
         }
         save.onclick = function (event) {
-            websocket.send(JSON.stringify({ action: 'save', value: content.value }));
+            websocket.send(JSON.stringify({ action: 'save_project', value: content.value }));
         }
         websocket.onmessage = function (event) {
             data = JSON.parse(event.data);
@@ -430,8 +447,11 @@
                         data.count.toString() + " user" +
                         (data.count == 1 ? "" : "s"));
                     break;
-                case "list":
-                    content.value = data.value;
+                case "project_list":
+                    content.value = JSON.stringify(data.value);
+                    break;
+                case "file_list":
+                    content.value = JSON.stringify(data.value);
                     break;
                 case 'project':
                     content.value = data.value;
