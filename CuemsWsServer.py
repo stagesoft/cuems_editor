@@ -14,9 +14,9 @@ from hashlib import md5
 
 import time
 
-from CuemsProjectManager import CuemsMedia, CuemsProject
-from CuemsErrors import *
-from CuemsUtils import StringSanitizer
+from .CuemsProjectManager import CuemsMedia, CuemsProject
+from .CuemsErrors import *
+from .CuemsUtils import StringSanitizer, LIBRARY_PATH
 
 
 
@@ -40,8 +40,8 @@ class CuemsWsServer():
 
     projects=[{"CuemsScript": {"uuid": "76861217-2d40-47a2-bdb5-8f9c91293855", "name": "Proyecto test 0", "date": "14/08/2020 11:18:16", "timecode_cuelist": {"CueList": {"Cue": [{"uuid": "bf2d217f-881d-47c1-9ad1-f5999769bcc5", "time": {"CTimecode": "00:00:33:00"}, "type": "mtc", "loop": "False", "outputs": {"CueOutputs": {"id": 5, "bla": "ble"}}}, {"uuid": "8ace53f3-74f5-4195-822e-93c12fdf3725", "time": {"NoneType": "None"}, "type": "floating", "loop": "False", "outputs": {"CueOutputs": {"physiscal": 1, "virtual": 3}}}], "AudioCue": {"uuid": "be288e38-887a-446f-8cbf-c16c9ec6724a", "time": {"CTimecode": "00:00:45:00"}, "type": "virtual", "loop": "True", "outputs": {"AudioCueOutputs": {"stereo": 1}}}}}, "floating_cuelist": {"CueList": {"DmxCue": {"uuid": "f36fa4b3-e220-4d75-bff1-210e14655c11", "time": {"CTimecode": "00:00:23:00"}, "dmx_scene": {"DmxScene": {"DmxUniverse": [{"id": 0, "DmxChannel": [{"id": 0, "&": 10}, {"id": 1, "&": 50}]}, {"id": 1, "DmxChannel": [{"id": 20, "&": 23}, {"id": 21, "&": 255}]}, {"id": 2, "DmxChannel": [{"id": 5, "&": 10}, {"id": 6, "&": 23}, {"id": 7, "&": 125}, {"id": 8, "&": 200}]}]}}, "outputs": {"DmxCueOutputs": {"universe0": 3}}}, "Cue": {"uuid": "17376d8f-84c6-4f28-859a-a01260a1dadb", "time": {"CTimecode": "00:00:05:00"}, "type": "virtual", "loop": "False", "outputs": {"CueOutputs": {"id": 3}}}}}}}, {"CuemsScript": {"uuid": "e05de59a-b281-4abf-83ba-97198d661a63", "name": "Segundo proyecto", "date": "13/08/2020 07:23:12", "timecode_cuelist": {"CueList": {"Cue": [{"uuid": "d47a75e2-f76e-4c77-b33e-e1df40ffdf02", "time": {"CTimecode": "00:00:33:00"}, "type": "mtc", "loop": "False", "outputs": {"CueOutputs": {"id": 5, "bla": "ble"}}}, {"uuid": "b5c35e3d-91f6-42d8-9825-0176354b44c1", "time": {"NoneType": "None"}, "type": "floating", "loop": "False", "outputs": {"CueOutputs": {"physiscal": 1, "virtual": 3}}}], "AudioCue": {"uuid": "aef5e289-03b0-4b39-99cd-90063d9b8c80", "time": {"CTimecode": "00:00:45:00"}, "type": "virtual", "loop": "True", "outputs": {"AudioCueOutputs": {"stereo": 1}}}}}, "floating_cuelist": {"CueList": {"DmxCue": {"uuid": "5d4ef443-5a49-4986-a283-9563ee7a9e85", "time": {"CTimecode": "00:00:23:00"}, "dmx_scene": {"DmxScene": {"DmxUniverse": [{"id": 0, "DmxChannel": [{"id": 0, "&": 10}, {"id": 1, "&": 50}]}, {"id": 1, "DmxChannel": [{"id": 20, "&": 23}, {"id": 21, "&": 255}]}, {"id": 2, "DmxChannel": [{"id": 5, "&": 10}, {"id": 6, "&": 23}, {"id": 7, "&": 125}, {"id": 8, "&": 200}]}]}}, "outputs": {"DmxCueOutputs": {"universe0": 3}}}, "Cue": {"uuid": "37f80125-1c41-4cce-aab1-13328dd8c94e", "time": {"CTimecode": "00:00:05:00"}, "type": "virtual", "loop": "False", "outputs": {"CueOutputs": {"id": 3}}}}}}}]
     tmp_upload_forlder_path = '/tmp/cuemsupload'
-    library_path = os.path.join(os.getcwd(), 'cuems_library')
-    media_path = os.path.join(library_path, 'media')     #TODO: get upload folder path from settings?
+    
+    media_path = os.path.join(LIBRARY_PATH, 'media')     #TODO: get upload folder path from settings?
     
     def __init__(self):
         self.state = {"value": 0} #TODO: provisional
@@ -441,33 +441,13 @@ class CuemsUpload(StringSanitizer):
     async def upload_done(self, received_md5):
         try:
             
-            
-            
             await self.server.event_loop.run_in_executor(self.server.executor, self.check_file_integrity,  self.tmp_file_path(), received_md5)
-
-            i = 0
-            (base, ext) = os.path.splitext(self.filename)
-            while True:     
-                if not os.path.exists(self.file_path()):
-                    logging.info('new file uploaded, saving to: {}'.format(self.file_path()))
-                    shutil.move( self.tmp_file_path(), self.file_path())
-                    self.tmp_filename = None
-                    break
-                else:
-                    i += 1
-                    self.filename = base + str(i) + ext
-                    continue
             
-            await self.server.event_loop.run_in_executor(self.server.executor, CuemsMedia.new,  self.filename)
+            await self.server.event_loop.run_in_executor(self.server.executor, CuemsMedia.new,  self.tmp_file_path(), self.filename)
+            self.tmp_filename = None
             logging.debug('upload completed')
             await self.message_sender(json.dumps({"close" : True}))
         except Exception as e:
-            if self.tmp_filename is None:
-                try:
-                    os.remove(self.file_path())  # TODO: change to pathlib ?  
-                    logging.error('cleaning file upload because db insertion failed: ({})'.format(self.file_path()))
-                except FileNotFoundError:
-                    pass
             logging.error("error: {} {}".format(type(e), e))
             await self.message_sender(json.dumps({'error' : 'error saving file', 'fatal': True}))
 
@@ -481,9 +461,6 @@ class CuemsUpload(StringSanitizer):
             
         return True
 
-    def file_path(self):
-        return os.path.join(self.media_path, self.filename)
-    
     def tmp_file_path(self):
         if not self.tmp_filename is None:
             return os.path.join(self.tmp_upload_forlder_path, self.tmp_filename)
