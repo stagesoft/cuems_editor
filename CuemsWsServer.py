@@ -214,38 +214,53 @@ class CuemsWsUser():
 
     async def consumer(self):
         while True:
+            message = await self.incoming.get()
             try:
-                message = await self.incoming.get()
                 data = json.loads(message)
-                if "action" not in data:
-                    logging.error("unsupported event: {}".format(data))
-                    await self.notify_error_to_user("unsupported event: {}".format(data))
-                elif data["action"] == "minus":
-                    self.server.state["value"] -= 1
-                    await self.server.notify_state()
-                elif data["action"] == "plus":
-                    self.server.state["value"] += 1
-                    await self.server.notify_state()
-                elif data["action"] == "project_load":
-                    await self.send_project(data["value"])
-                elif data["action"] == "project_save":
-                    await self.received_project(data["value"])
-                elif data["action"] == "project_delete":
-                    await self.request_delete_project(data["value"])
-                elif data["action"] == "project_list":
-                    await self.list_projects()
-                elif data["action"] == "file_list":
-                    await self.list_files()
-                elif data["action"] == "file_delete":
-                    await self.request_delete_file(data["value"])
-                else:
-                    logging.error("unsupported action: {}".format(data))
-                    await self.notify_error_to_user("unsupported action: {}".format(data))
             except Exception as e:
                 logging.error("error: {} {}".format(type(e), e))
-                await self.notify_error_to_user('error decoding json')
-                    
-                       
+                await self.notify_error_to_user('error decoding json') 
+                continue
+            
+            if "action" not in data:
+                logging.error("unsupported event: {}".format(data))
+                await self.notify_error_to_user("unsupported event: {}".format(data))
+            elif data["action"] == "minus":
+                self.server.state["value"] -= 1
+                await self.server.notify_state()
+            elif data["action"] == "plus":
+                self.server.state["value"] += 1
+                await self.server.notify_state()
+            elif data["action"] == "project_load":
+                await self.send_project(data["value"])
+            elif data["action"] == "project_save":
+                await self.received_project(data["value"])
+            elif data["action"] == "project_delete":
+                await self.request_delete_project(data["value"])
+            elif data["action"] == "project_restore":
+                await self.request_restore_project(data["value"])
+            elif data["action"] == "project_trash_delete":
+                await self.request_delete_project_trash(data["value"])
+            elif data["action"] == "project_list":
+                await self.list_project()
+            elif data["action"] == "file_list":
+                await self.list_file()
+            elif data["action"] == "project_trash_list":
+                await self.list_project_trash()
+            elif data["action"] == "file_trash_list":
+                await self.list_file_trash()
+            elif data["action"] == "file_save":
+                await self.received_file_data(data["value"])
+            elif data["action"] == "file_delete":
+                await self.request_delete_file(data["value"])
+            elif data["action"] == "file_restore":
+                await self.request_restore_file(data["value"])
+            elif data["action"] == "file_trash_delete":
+                await self.request_delete_file_trash(data["value"])
+            else:
+                logging.error("unsupported action: {}".format(data))
+                await self.notify_error_to_user("unsupported action: {}".format(data))
+
 
     async def producer(self):
         while True:
@@ -255,24 +270,26 @@ class CuemsWsUser():
     async def notify_user(self, msg=None, uuid=None, action=None):
         if (uuid is None) and (action is None) and (msg is not None):
             await self.outgoing.put(json.dumps({"type": "state", "value":msg}))
-        else:
+        elif (msg is None):
             await self.outgoing.put(json.dumps({"type": action, "value": uuid}))
 
-    async def notify_error_to_user(self, msg, uuid=None, action=None):
-        if (uuid is None) and (action is None):
+    async def notify_error_to_user(self, msg=None, uuid=None, action=None):
+        if (uuid is None) and (action is None) and (msg is not None):
             await self.outgoing.put(json.dumps({"type": "error", "value": msg}))
+        elif(uuid is None) and (action is not None) and (msg is not None):
+            await self.outgoing.put(json.dumps({"type": "error", "action": action, "value": msg}))
         else:
-            await self.outgoing.put(json.dumps({"type": "error", "action": action, "uuid": uuid, "value": msg}))
+            await self.outgoing.put(json.dumps({"type": "error", "uuid": uuid, "action": action, "value": msg}))
 
 
-    async def list_projects(self):
+    async def list_project(self):
         logging.info("user {} loading project list".format(id(self.websocket)))
         try:
             project_list = await self.server.event_loop.run_in_executor(self.server.executor, self.load_project_list)    
             await self.outgoing.put(json.dumps({"type": "project_list", "value": project_list}))
         except Exception as e:
             logging.error("error: {} {}".format(type(e), e))
-            await self.notify_error_to_user('error loading project list')
+            await self.notify_error_to_user(str(e),  action="project_list")
 
     async def send_project(self, project_uuid):
         try:
@@ -286,7 +303,7 @@ class CuemsWsUser():
             self.server.users[self] = project_uuid
         except Exception as e:
             logging.error("error: {} {}".format(type(e), e))
-            await self.notify_error_to_user('error loading project', uuid=project_uuid, action="project_load")
+            await self.notify_error_to_user(str(e), uuid=project_uuid, action="project_load")
 
     async def received_project(self, data):
         try:
@@ -303,40 +320,106 @@ class CuemsWsUser():
             logging.error("error: {} {}".format(type(e), e))
             await self.notify_error_to_user(str(e), uuid=project_uuid, action="project_save")
 
+    async def list_project_trash(self):
+        logging.info("user {} loading project trash list".format(id(self.websocket)))
+        try:
+            project_trash_list = await self.server.event_loop.run_in_executor(self.server.executor, self.load_project_trash_list)    
+            await self.outgoing.put(json.dumps({"type": "project_trash_list", "value": project_trash_list}))
+        except Exception as e:
+            logging.error("error: {} {}".format(type(e), e))
+            await self.notify_error_to_user(str(e),  action="project_trash_list")
+
     async def request_delete_project(self, project_uuid):
         try:
             logging.info("user {} deleting project: {}".format(id(self.websocket), project_uuid))
             
             await self.server.event_loop.run_in_executor(self.server.executor, self.delete_project, project_uuid)
 
-            # self.users[self] = None  #TODO:what is now the active project? deleted project was the active one?
             await self.notify_user(uuid=project_uuid, action="project_delete")
             await self.server.notify_others(self, "project_deleted", project_uuid=project_uuid)
         except Exception as e:
             logging.error("error: {} {}".format(type(e), e))
             await self.notify_error_to_user(str(e), uuid=project_uuid, action="project_delete")
 
-    async def list_files(self):
+    async def request_restore_project(self, project_uuid):
+        try:
+            logging.info("user {} restoring project: {}".format(id(self.websocket), project_uuid))
+            
+            await self.server.event_loop.run_in_executor(self.server.executor, self.restore_project, project_uuid)
+
+            await self.notify_user(uuid=project_uuid, action="project_restore")
+        except Exception as e:
+            logging.error("error: {} {}".format(type(e), e))
+            await self.notify_error_to_user(str(e), uuid=project_uuid, action="project_restore")
+
+    async def request_delete_project_trash(self, project_uuid):
+        try:
+            logging.info("user {} deleting project from trash: {}".format(id(self.websocket), project_uuid))
+            
+            await self.server.event_loop.run_in_executor(self.server.executor, self.delete_project_trash, project_uuid)
+
+            await self.notify_user(uuid=project_uuid, action="project_trash_delete")
+        except Exception as e:
+            logging.error("error: {} {}".format(type(e), e))
+            await self.notify_error_to_user(str(e), uuid=project_uuid, action="project_trash_delete")
+
+    async def list_file(self):
         logging.info("user {} loading file list".format(id(self.websocket)))
         try:
             file_list = await self.server.event_loop.run_in_executor(self.server.executor, self.load_file_list)    
             await self.outgoing.put(json.dumps({"type": "file_list", "value": file_list}))
         except Exception as e:
             logging.error("error: {} {}".format(type(e), e))
-            await self.notify_error_to_user('error loading file list')
+            await self.notify_error_to_user(str(e),  action="file_list")
+
+    async def received_file_data(self, data):
+        try:
+            file_uuid = data['uuid']
+
+            logging.info("user {} update file data {}".format(id(self.websocket), file_uuid))
+            
+            return_message = await self.server.event_loop.run_in_executor(self.server.executor, self.save_file, file_uuid, data)
+            await self.notify_user(uuid=file_uuid, action="file_save")
+        except Exception as e:
+            logging.error("error: {} {}".format(type(e), e))
+            await self.notify_error_to_user(str(e), uuid=file_uuid, action="file_save")
+
+    async def list_file_trash(self):
+        logging.info("user {} loading file trash list".format(id(self.websocket)))
+        try:
+            file_trash_list = await self.server.event_loop.run_in_executor(self.server.executor, self.load_file_trash_list)    
+            await self.outgoing.put(json.dumps({"type": "file_trash_list", "value": file_trash_list}))
+        except Exception as e:
+            logging.error("error: {} {}".format(type(e), e))
+            await self.notify_error_to_user(str(e),  action="file_trash_list")
 
 
     async def request_delete_file(self, file_uuid):
         try:
             logging.debug("user {} deleting file: {}".format(id(self.websocket), file_uuid))
-            
             await self.server.event_loop.run_in_executor(self.server.executor, self.delete_file, file_uuid)
-
-            # self.users[self] = None  #TODO:what is now the active project? deleted project was the active one?
-            await self.notify_user("file {} deleted".format(file_uuid))
+            await self.notify_user(uuid=file_uuid, action="file_delete")
         except Exception as e:
             logging.error("error: {} {}".format(type(e), e))
             await self.notify_error_to_user(str(e), uuid=file_uuid, action="file_delete")
+
+    async def request_restore_file(self, file_uuid):
+        try:
+            logging.debug("user {} restoring file: {}".format(id(self.websocket), file_uuid))
+            await self.server.event_loop.run_in_executor(self.server.executor, self.restore_file, file_uuid)
+            await self.notify_user(uuid=file_uuid, action="file_restore")
+        except Exception as e:
+            logging.error("error: {} {}".format(type(e), e))
+            await self.notify_error_to_user(str(e), uuid=file_uuid, action="file_restore")
+
+    async def request_delete_file_trash(self, file_uuid):
+        try:
+            logging.info("user {} deleting file from trash: {}".format(id(self.websocket), file_uuid))
+            await self.server.event_loop.run_in_executor(self.server.executor, self.delete_file_trash, file_uuid)
+            await self.notify_user(uuid=file_uuid, action="file_trash_delete")
+        except Exception as e:
+            logging.error("error: {} {}".format(type(e), e))
+            await self.notify_error_to_user(str(e), uuid=file_uuid, action="file_trash_delete")
 
     # call blocking functions asynchronously with run_in_executor ThreadPoolExecutor
     def load_project_list(self):
@@ -359,12 +442,36 @@ class CuemsWsUser():
     def delete_project(self, project_uuid):
         CuemsProject.delete(project_uuid)
 
+    def restore_project(self, project_uuid):
+        CuemsProject.restore(project_uuid)
+
+    def load_project_trash_list(self):
+        logging.info("loading project trash list")
+        return CuemsProject.list_trash()
+
+    def delete_project_trash(self, project_uuid):
+        CuemsProject.delete_from_trash(project_uuid)
+
     def load_file_list(self):
         logging.info("loading file list")
         return CuemsMedia.list()
 
+    def save_file(self, file_uuid, data):
+        logging.info("saving file data")
+        CuemsProject.save(file_uuid, data)
+
     def delete_file(self, file_uuid):
         CuemsMedia.delete(file_uuid)
+
+    def restore_file(self, file_uuid):
+        CuemsMedia.restore(file_uuid)
+
+    def load_file_trash_list(self):
+        logging.info("loading file trash list")
+        return CuemsMedia.list_trash()
+
+    def delete_file_trash(self, file_uuid):
+        CuemsMedia.delete_from_trash(file_uuid)
 
 class CuemsUpload(StringSanitizer):
 
