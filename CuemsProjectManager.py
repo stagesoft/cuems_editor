@@ -7,6 +7,7 @@ import shutil
 
 import logging
 from .CuemsUtils import StringSanitizer, MoveVersioned, LIBRARY_PATH
+from .CuemsErrors import *
 from .. import DictParser
 
 logger = logging.getLogger('peewee')
@@ -121,15 +122,18 @@ class CuemsMedia(StringSanitizer):
 
     @staticmethod
     def delete(uuid):
+        try:
+            media = Media.get(Media.uuid==uuid)
+        except DoesNotExist:
+            raise NonExistentItemError("item with uuid: {} does not exit".format(uuid))
+
         with db.atomic() as transaction:
             try:
-                media = Media.get(Media.uuid==uuid)
                 file_path = os.path.join(CuemsMedia.media_path, media.unix_name)
                 dest_filename = MoveVersioned.move(file_path, CuemsMedia.trash_path, media.unix_name)
                 Media_Trash.create(uuid=media.uuid, name=media.name, unix_name=dest_filename, created=media.created, modified=now_formated())
                 media.delete_instance()
                 logging.debug('deleting instance from table: {}'.format(media))
-                
             except Exception as e:
                 logging.error("error: {} {}; triying to move file to trash, rolling back database".format(type(e), e))
                 transaction.rollback()
@@ -150,7 +154,7 @@ class CuemsProject(StringSanitizer):
         return project_list
 
     @staticmethod
-    def save(uuid, data):
+    def save(uuid, data):   #TODO: check uuid format
         try:
             project = Project.get(Project.uuid==uuid)
             with db.atomic() as transaction:
@@ -187,7 +191,11 @@ class CuemsProject(StringSanitizer):
 
     @staticmethod
     def delete(uuid):
-        project = Project.get(Project.uuid==uuid)
+        try:
+            project = Project.get(Project.uuid==uuid)
+        except DoesNotExist:
+                raise NonExistentItemError("item with uuid: {} does not exit".format(uuid))
+
         with db.atomic() as transaction:
             try:
                 shutil.rmtree(os.path.join(CuemsProject.projects_path, project.unix_name))
