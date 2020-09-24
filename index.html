@@ -376,6 +376,9 @@
     </div>
     <div class="load list button" id='list'>Load project list</div>
     <div class="load list button" id='list_files'>Load file list</div>
+    <div class="load list button" id='list_trash'>Load project trash list</div>
+    <div class="load list button" id='list_files_trash'>Load file trash list</div>
+    
     <div class="buttons2">
         <div class="load button" id='load'>Load</div>
 
@@ -403,17 +406,19 @@
     </script>
 
     <script>
-        var minus = document.querySelector('.minus'),
-            plus = document.querySelector('.plus'),
-            value = document.querySelector('#count'),
-            users = document.querySelector('.users'),
-            list = document.querySelector('#list')
-            list_files = document.querySelector('#list_files')
-        load = document.querySelector('#load'),
-            save = document.querySelector('#save'),
-            content = document.querySelector('#content'),
-            notifications = document.querySelector('#notifications'),
-            project_id = document.querySelector('#project_id')
+        var minus = document.querySelector('.minus');
+        var plus = document.querySelector('.plus');
+        var value = document.querySelector('#count');
+        var users = document.querySelector('.users');
+        var list = document.querySelector('#list');
+        var list_files = document.querySelector('#list_files');
+        var list_trash = document.querySelector('#list_trash');
+        var list_files_trash = document.querySelector('#list_files_trash');
+        var load = document.querySelector('#load');
+        var save = document.querySelector('#save');
+        var content = document.querySelector('#content');
+        var notifications = document.querySelector('#notifications');
+        var project_id = document.querySelector('#project_id');
 
         //websocket = new WebSocket("wss://dev.stagelab.net/ws");
         websocket = new WebSocket("ws://localhost:9092");
@@ -424,17 +429,25 @@
             websocket.send(JSON.stringify({ action: 'plus' }));
         }
         list.onclick = function (event) {
-            websocket.send(JSON.stringify({ action: 'list_projects' }));
+            websocket.send(JSON.stringify({ action: 'project_list' }));
         }
         list_files.onclick = function (event) {
-            websocket.send(JSON.stringify({ action: 'list_files' }));
+            websocket.send(JSON.stringify({ action: 'file_list' }));
+        }
+        list_trash.onclick = function (event) {
+            websocket.send(JSON.stringify({ action: 'project_trash_list' }));
+        }
+        list_files_trash.onclick = function (event) {
+            websocket.send(JSON.stringify({ action: 'file_trash_list' }));
         }
         load.onclick = function (event) {
             //  websocket.send(JSON.stringify({action: 'load', value: project_id.value}));
-            websocket.send(JSON.stringify({ action: 'load_project', value: '76861217-2d40-47a2-bdb5-8f9c91293855' }));
+            websocket.send(JSON.stringify({ action: 'project_load', value: '76861217-2d40-47a2-bdb5-8f9c91293855' }));
         }
         save.onclick = function (event) {
-            websocket.send(JSON.stringify({ action: 'save_project', value: content.value }));
+            console.log(content.value)
+            console.log(JSON.parse(content.value))
+            websocket.send(JSON.stringify({ action: 'project_save', value: JSON.parse(content.value) }));
         }
         websocket.onmessage = function (event) {
             data = JSON.parse(event.data);
@@ -444,8 +457,8 @@
                     break;
                 case 'users':
                     users.textContent = (
-                        data.count.toString() + " user" +
-                        (data.count == 1 ? "" : "s"));
+                        data.value.toString() + " user" +
+                        (data.value == 1 ? "" : "s"));
                     break;
                 case "project_list":
                     content.value = JSON.stringify(data.value);
@@ -453,8 +466,56 @@
                 case "file_list":
                     content.value = JSON.stringify(data.value);
                     break;
+                case "project_trash_list":
+                    content.value = JSON.stringify(data.value);
+                    break;
+                case "file_trash_list":
+                    content.value = JSON.stringify(data.value);
+                    break;
                 case 'project':
-                    content.value = data.value;
+                    content.value = JSON.stringify(data.value);
+                    break;
+                case 'project_save':
+                    var element = document.createElement("div");
+                    element.appendChild(document.createTextNode("project " + JSON.stringify(data.value) + " saved"));
+                    notifications.appendChild(element);
+                    notifications.style.display = 'block';
+                    break;
+                case 'project_delete':
+                    var element = document.createElement("div");
+                    element.appendChild(document.createTextNode("project " + JSON.stringify(data.value) + " deleted"));
+                    notifications.appendChild(element);
+                    notifications.style.display = 'block';
+                    break;
+                case 'file_delete':
+                    var element = document.createElement("div");
+                    element.appendChild(document.createTextNode("file " + JSON.stringify(data.value) + " deleted"));
+                    notifications.appendChild(element);
+                    notifications.style.display = 'block';
+                    break;
+                case 'file_restore':
+                    var element = document.createElement("div");
+                    element.appendChild(document.createTextNode("file " + JSON.stringify(data.value) + " restored"));
+                    notifications.appendChild(element);
+                    notifications.style.display = 'block';
+                    break;
+                case 'project_restore':
+                    var element = document.createElement("div");
+                    element.appendChild(document.createTextNode("project " + JSON.stringify(data.value) + " restored"));
+                    notifications.appendChild(element);
+                    notifications.style.display = 'block';
+                    break;
+                case 'project_trash_delete':
+                    var element = document.createElement("div");
+                    element.appendChild(document.createTextNode("project " + JSON.stringify(data.value) + " deleted from trash"));
+                    notifications.appendChild(element);
+                    notifications.style.display = 'block';
+                    break;
+                case 'file_trash_delete':
+                    var element = document.createElement("div");
+                    element.appendChild(document.createTextNode("file " + JSON.stringify(data.value) + " deleted from trash"));
+                    notifications.appendChild(element);
+                    notifications.style.display = 'block';
                     break;
                 case "state":
                 case "error":
