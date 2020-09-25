@@ -2,7 +2,6 @@ import sys
 import asyncio
 import concurrent.futures
 import json
-import logging
 import os
 import shutil
 import aiofiles
@@ -14,6 +13,8 @@ from hashlib import md5
 
 import time
 
+from ..log import *
+
 from .CuemsProjectManager import CuemsMedia, CuemsProject
 from .CuemsErrors import *
 from .CuemsUtils import StringSanitizer, LIBRARY_PATH
@@ -21,13 +22,14 @@ from .CuemsUtils import StringSanitizer, LIBRARY_PATH
 
 
 
-stream = logging.StreamHandler()
-formatter = logging.Formatter('Cuems:ws-server: %(levelname)s (PID: %(process)d)-%(threadName)-9s)-(%(funcName)s) %(message)s')
-stream.setFormatter(formatter)
 
-logger_ws_server = logging.getLogger()
+formatter = logging.Formatter('Cuems:ws-server: %(levelname)s (PID: %(process)d)-%(threadName)-9s)-(%(funcName)s) %(message)s')
+
+
+logger_ws_server = logging.getLogger('ws-server')
 logger_ws_server.setLevel(logging.DEBUG)
-logger_ws_server.addHandler(stream)
+handler.setFormatter(formatter)
+logger_ws_server.addHandler(handler)
 
 logger_asyncio = logging.getLogger('asyncio')
 logger_asyncio.setLevel(logging.INFO)  # asyncio debug level 
@@ -49,9 +51,9 @@ class CuemsWsServer():
         try:
             if not os.path.exists(self.tmp_upload_forlder_path):
                 os.mkdir(self.tmp_upload_forlder_path)
-                logging.info('creating tmp upload folder {}'.format(self.tmp_upload_forlder_path))
+                logger.info('creating tmp upload folder {}'.format(self.tmp_upload_forlder_path))
         except Exception as e:
-            logging.error("error: {} {}".format(type(e), e))
+            logger.error("error: {} {}".format(type(e), e))
 
 
 
@@ -72,7 +74,7 @@ class CuemsWsServer():
         self.project_server = ws.serve(self.connection_handler, self.host, self.port, max_size=None) #TODO: choose max packets size from ui and limit it here
         for sig in (signal.SIGINT, signal.SIGTERM):
             self.event_loop.add_signal_handler(sig, self.ask_exit)
-        logging.info('server listening on {}, port {}'.format(self.host, self.port))
+        logger.info('server listening on {}, port {}'.format(self.host, self.port))
         self.event_loop.run_until_complete(self.project_server)
         self.event_loop.run_forever()
         self.event_loop.close()
@@ -80,30 +82,30 @@ class CuemsWsServer():
     def stop(self):
         os.kill(self.process.pid, signal.SIGTERM)
         self.process.join()
-        logging.info('ws process joined')
+        logger.info('ws process joined')
         
     def ask_exit(self):
         self.event_loop.call_soon_threadsafe(self.project_server.ws_server.close)
-        logging.info('ws server closing')
+        logger.info('ws server closing')
         asyncio.run_coroutine_threadsafe(self.stop_async(), self.event_loop)
               
 
     async def stop_async(self):
         await self.project_server.ws_server.wait_closed()
-        logging.info('ws server closed')
+        logger.info('ws server closed')
         self.event_loop.call_soon(self.event_loop.stop)
-        logging.info('event loop stoped')
+        logger.info('event loop stoped')
 
     async def connection_handler(self, websocket, path):
         
-        logging.info("new connection: {}, path: {}".format(websocket, path))
+        logger.info("new connection: {}, path: {}".format(websocket, path))
 
         if path == '/':                                    # project manager
             await self.project_manager_session(websocket)
         elif path == '/upload':                            # file upload
             await self.upload_session(websocket)
         else:
-            logging.info("unknow path: {}".format(path))
+            logger.info("unknow path: {}".format(path))
 
     async def project_manager_session(self, websocket):
         user_session = CuemsWsUser(self, websocket)
@@ -125,18 +127,18 @@ class CuemsWsServer():
 
     async def upload_session(self, websocket):
         user_upload_session = CuemsUpload(self, websocket)
-        logging.info("new upload session: {}".format(user_upload_session))
+        logger.info("new upload session: {}".format(user_upload_session))
 
         await user_upload_session.message_handler()
-        logging.info("upload session ended: {}".format(user_upload_session))
+        logger.info("upload session ended: {}".format(user_upload_session))
 
     async def register(self, user_task):
-        logging.info("user registered: {}".format(id(user_task.websocket)))
+        logger.info("user registered: {}".format(id(user_task.websocket)))
         self.users[user_task] = None
         await self.notify_users("users")
 
     async def unregister(self, user_task):
-        logging.info("user unregistered: {}".format(id(user_task.websocket)))
+        logger.info("user unregistered: {}".format(id(user_task.websocket)))
         self.users.pop(user_task, None)
         await self.notify_users("users")
 
@@ -158,9 +160,9 @@ class CuemsWsServer():
                         if str(project) != str(self.users[calling_user]):
                             continue
 
-                    logging.debug('same project loaded')
+                    logger.debug('same project loaded')
                     await user.outgoing.put(message)
-                    logging.debug('notifing {}'.format(user))
+                    logger.debug('notifing {}'.format(user))
     
     async def notify_users(self, type):
         if self.users:  # asyncio.wait doesn't accept an empty dcit
@@ -181,8 +183,8 @@ class CuemsWsServer():
             return json.dumps({"type": type, "uuid": uuid, "value" : "modified in server"})
 
     def exception_handler(self, loop, context):
-        logging.debug("Caught the following exception: (ignore if on closing)")
-        logging.debug(context['message'])
+        logger.debug("Caught the following exception: (ignore if on closing)")
+        logger.debug(context['message'])
 
 
 class CuemsWsUser():
@@ -200,7 +202,7 @@ class CuemsWsUser():
             async for message in self.websocket:
                 await self.incoming.put(message)
         except (ws.exceptions.ConnectionClosed, ws.exceptions.ConnectionClosedOK, ws.exceptions.ConnectionClosedError) as e:
-                logging.debug(e)
+                logger.debug(e)
 
     async def producer_handler(self):
         while True:
@@ -208,7 +210,7 @@ class CuemsWsUser():
             try:
                 await self.websocket.send(message)
             except (ws.exceptions.ConnectionClosed, ws.exceptions.ConnectionClosedOK, ws.exceptions.ConnectionClosedError) as e:
-                logging.debug(e)
+                logger.debug(e)
                 break
 
 
@@ -218,12 +220,12 @@ class CuemsWsUser():
             try:
                 data = json.loads(message)
             except Exception as e:
-                logging.error("error: {} {}".format(type(e), e))
+                logger.error("error: {} {}".format(type(e), e))
                 await self.notify_error_to_user('error decoding json') 
                 continue
             
             if "action" not in data:
-                logging.error("unsupported event: {}".format(data))
+                logger.error("unsupported event: {}".format(data))
                 await self.notify_error_to_user("unsupported event: {}".format(data))
             elif data["action"] == "minus":
                 self.server.state["value"] -= 1
@@ -258,7 +260,7 @@ class CuemsWsUser():
             elif data["action"] == "file_trash_delete":
                 await self.request_delete_file_trash(data["value"])
             else:
-                logging.error("unsupported action: {}".format(data))
+                logger.error("unsupported action: {}".format(data))
                 await self.notify_error_to_user("unsupported action: {}".format(data))
 
 
@@ -283,26 +285,26 @@ class CuemsWsUser():
 
 
     async def list_project(self):
-        logging.info("user {} loading project list".format(id(self.websocket)))
+        logger.info("user {} loading project list".format(id(self.websocket)))
         try:
             project_list = await self.server.event_loop.run_in_executor(self.server.executor, self.load_project_list)    
             await self.outgoing.put(json.dumps({"type": "project_list", "value": project_list}))
         except Exception as e:
-            logging.error("error: {} {}".format(type(e), e))
+            logger.error("error: {} {}".format(type(e), e))
             await self.notify_error_to_user(str(e),  action="project_list")
 
     async def send_project(self, project_uuid):
         try:
             if project_uuid == '':
                 raise NonExistentItemError('project uuid is empty')
-            logging.info("user {} loading project {}".format(id(self.websocket), project_uuid))
+            logger.info("user {} loading project {}".format(id(self.websocket), project_uuid))
             project = await self.server.event_loop.run_in_executor(self.server.executor, self.load_project, project_uuid)
             msg = json.dumps({"type":"project", "value":project})
             await self.outgoing.put(msg)
             await self.notify_user("project loaded")
             self.server.users[self] = project_uuid
         except Exception as e:
-            logging.error("error: {} {}".format(type(e), e))
+            logger.error("error: {} {}".format(type(e), e))
             await self.notify_error_to_user(str(e), uuid=project_uuid, action="project_load")
 
     async def received_project(self, data):
@@ -310,133 +312,133 @@ class CuemsWsUser():
             project = data
             project_uuid = project['CuemsScript']['uuid']
 
-            logging.info("user {} saving project {}".format(id(self.websocket), project_uuid))
+            logger.info("user {} saving project {}".format(id(self.websocket), project_uuid))
             
             return_message = await self.server.event_loop.run_in_executor(self.server.executor, self.save_project, project_uuid, project)
             self.server.users[self] = project_uuid
             await self.notify_user(uuid=project_uuid, action="project_save")
             await self.server.notify_others(self, "project_modified")
         except Exception as e:
-            logging.error("error: {} {}".format(type(e), e))
+            logger.error("error: {} {}".format(type(e), e))
             await self.notify_error_to_user(str(e), uuid=project_uuid, action="project_save")
 
     async def list_project_trash(self):
-        logging.info("user {} loading project trash list".format(id(self.websocket)))
+        logger.info("user {} loading project trash list".format(id(self.websocket)))
         try:
             project_trash_list = await self.server.event_loop.run_in_executor(self.server.executor, self.load_project_trash_list)    
             await self.outgoing.put(json.dumps({"type": "project_trash_list", "value": project_trash_list}))
         except Exception as e:
-            logging.error("error: {} {}".format(type(e), e))
+            logger.error("error: {} {}".format(type(e), e))
             await self.notify_error_to_user(str(e),  action="project_trash_list")
 
     async def request_delete_project(self, project_uuid):
         try:
-            logging.info("user {} deleting project: {}".format(id(self.websocket), project_uuid))
+            logger.info("user {} deleting project: {}".format(id(self.websocket), project_uuid))
             
             await self.server.event_loop.run_in_executor(self.server.executor, self.delete_project, project_uuid)
 
             await self.notify_user(uuid=project_uuid, action="project_delete")
             await self.server.notify_others(self, "project_deleted", project_uuid=project_uuid)
         except Exception as e:
-            logging.error("error: {} {}".format(type(e), e))
+            logger.error("error: {} {}".format(type(e), e))
             await self.notify_error_to_user(str(e), uuid=project_uuid, action="project_delete")
 
     async def request_restore_project(self, project_uuid):
         try:
-            logging.info("user {} restoring project: {}".format(id(self.websocket), project_uuid))
+            logger.info("user {} restoring project: {}".format(id(self.websocket), project_uuid))
             
             await self.server.event_loop.run_in_executor(self.server.executor, self.restore_project, project_uuid)
 
             await self.notify_user(uuid=project_uuid, action="project_restore")
         except Exception as e:
-            logging.error("error: {} {}".format(type(e), e))
+            logger.error("error: {} {}".format(type(e), e))
             await self.notify_error_to_user(str(e), uuid=project_uuid, action="project_restore")
 
     async def request_delete_project_trash(self, project_uuid):
         try:
-            logging.info("user {} deleting project from trash: {}".format(id(self.websocket), project_uuid))
+            logger.info("user {} deleting project from trash: {}".format(id(self.websocket), project_uuid))
             
             await self.server.event_loop.run_in_executor(self.server.executor, self.delete_project_trash, project_uuid)
 
             await self.notify_user(uuid=project_uuid, action="project_trash_delete")
         except Exception as e:
-            logging.error("error: {} {}".format(type(e), e))
+            logger.error("error: {} {}".format(type(e), e))
             await self.notify_error_to_user(str(e), uuid=project_uuid, action="project_trash_delete")
 
     async def list_file(self):
-        logging.info("user {} loading file list".format(id(self.websocket)))
+        logger.info("user {} loading file list".format(id(self.websocket)))
         try:
             file_list = await self.server.event_loop.run_in_executor(self.server.executor, self.load_file_list)    
             await self.outgoing.put(json.dumps({"type": "file_list", "value": file_list}))
         except Exception as e:
-            logging.error("error: {} {}".format(type(e), e))
+            logger.error("error: {} {}".format(type(e), e))
             await self.notify_error_to_user(str(e),  action="file_list")
 
     async def received_file_data(self, data):
         try:
             file_uuid = data['uuid']
 
-            logging.info("user {} update file data {}".format(id(self.websocket), file_uuid))
+            logger.info("user {} update file data {}".format(id(self.websocket), file_uuid))
             
             return_message = await self.server.event_loop.run_in_executor(self.server.executor, self.save_file, file_uuid, data)
             await self.notify_user(uuid=file_uuid, action="file_save")
         except Exception as e:
-            logging.error("error: {} {}".format(type(e), e))
+            logger.error("error: {} {}".format(type(e), e))
             await self.notify_error_to_user(str(e), uuid=file_uuid, action="file_save")
 
     async def list_file_trash(self):
-        logging.info("user {} loading file trash list".format(id(self.websocket)))
+        logger.info("user {} loading file trash list".format(id(self.websocket)))
         try:
             file_trash_list = await self.server.event_loop.run_in_executor(self.server.executor, self.load_file_trash_list)    
             await self.outgoing.put(json.dumps({"type": "file_trash_list", "value": file_trash_list}))
         except Exception as e:
-            logging.error("error: {} {}".format(type(e), e))
+            logger.error("error: {} {}".format(type(e), e))
             await self.notify_error_to_user(str(e),  action="file_trash_list")
 
 
     async def request_delete_file(self, file_uuid):
         try:
-            logging.debug("user {} deleting file: {}".format(id(self.websocket), file_uuid))
+            logger.debug("user {} deleting file: {}".format(id(self.websocket), file_uuid))
             await self.server.event_loop.run_in_executor(self.server.executor, self.delete_file, file_uuid)
             await self.notify_user(uuid=file_uuid, action="file_delete")
         except Exception as e:
-            logging.error("error: {} {}".format(type(e), e))
+            logger.error("error: {} {}".format(type(e), e))
             await self.notify_error_to_user(str(e), uuid=file_uuid, action="file_delete")
 
     async def request_restore_file(self, file_uuid):
         try:
-            logging.debug("user {} restoring file: {}".format(id(self.websocket), file_uuid))
+            logger.debug("user {} restoring file: {}".format(id(self.websocket), file_uuid))
             await self.server.event_loop.run_in_executor(self.server.executor, self.restore_file, file_uuid)
             await self.notify_user(uuid=file_uuid, action="file_restore")
         except Exception as e:
-            logging.error("error: {} {}".format(type(e), e))
+            logger.error("error: {} {}".format(type(e), e))
             await self.notify_error_to_user(str(e), uuid=file_uuid, action="file_restore")
 
     async def request_delete_file_trash(self, file_uuid):
         try:
-            logging.info("user {} deleting file from trash: {}".format(id(self.websocket), file_uuid))
+            logger.info("user {} deleting file from trash: {}".format(id(self.websocket), file_uuid))
             await self.server.event_loop.run_in_executor(self.server.executor, self.delete_file_trash, file_uuid)
             await self.notify_user(uuid=file_uuid, action="file_trash_delete")
         except Exception as e:
-            logging.error("error: {} {}".format(type(e), e))
+            logger.error("error: {} {}".format(type(e), e))
             await self.notify_error_to_user(str(e), uuid=file_uuid, action="file_trash_delete")
 
     # call blocking functions asynchronously with run_in_executor ThreadPoolExecutor
     def load_project_list(self):
-        logging.info("loading project list")
+        logger.info("loading project list")
         return CuemsProject.list()
 
     
     def load_project(self, project_uuid):
-        logging.info("loading project: {}".format(project_uuid))
+        logger.info("loading project: {}".format(project_uuid))
         for elem in self.server.projects:
             if elem['CuemsScript']['uuid'] == project_uuid:
-                logging.debug("loading project: {}".format(elem))
+                logger.debug("loading project: {}".format(elem))
                 return elem
         raise NonExistentItemError('Can not find project uuid for loading', uuid=project_uuid, action="file_delete")
 
     def save_project(self, project_uuid, data):
-        logging.debug('saving project, uuid:{}, data:{}'.format(project_uuid, data))
+        logger.debug('saving project, uuid:{}, data:{}'.format(project_uuid, data))
         return CuemsProject.save(project_uuid, data)
 
     def delete_project(self, project_uuid):
@@ -446,18 +448,18 @@ class CuemsWsUser():
         CuemsProject.restore(project_uuid)
 
     def load_project_trash_list(self):
-        logging.info("loading project trash list")
+        logger.info("loading project trash list")
         return CuemsProject.list_trash()
 
     def delete_project_trash(self, project_uuid):
         CuemsProject.delete_from_trash(project_uuid)
 
     def load_file_list(self):
-        logging.info("loading file list")
+        logger.info("loading file list")
         return CuemsMedia.list()
 
     def save_file(self, file_uuid, data):
-        logging.info("saving file data")
+        logger.info("saving file data")
         CuemsProject.save(file_uuid, data)
 
     def delete_file(self, file_uuid):
@@ -467,7 +469,7 @@ class CuemsWsUser():
         CuemsMedia.restore(file_uuid)
 
     def load_file_trash_list(self):
-        logging.info("loading file trash list")
+        logger.info("loading file trash list")
         return CuemsMedia.list_trash()
 
     def delete_file_trash(self, file_uuid):
@@ -497,14 +499,14 @@ class CuemsUpload(StringSanitizer):
                 elif isinstance(message, bytes):
                     await self.process_upload_packet(message)
             except (ws.exceptions.ConnectionClosed, ws.exceptions.ConnectionClosedOK, ws.exceptions.ConnectionClosedError):
-                logging.debug('upload connection closed, exiting loop')
+                logger.debug('upload connection closed, exiting loop')
                 break
 
     async def message_sender(self, message):
         try:
             await self.websocket.send(message)
         except (ws.exceptions.ConnectionClosed, ws.exceptions.ConnectionClosedOK, ws.exceptions.ConnectionClosedError) as e:
-                logging.debug(e)
+                logger.debug(e)
 
     async def process_upload_message(self, message):
         data = json.loads(message)
@@ -518,13 +520,13 @@ class CuemsUpload(StringSanitizer):
     async def set_upload(self, file_info):
         
         if not os.path.exists(self.media_path):
-            logging.error("upload folder doenst exists")
+            logger.error("upload folder doenst exists")
             await self.message_sender(json.dumps({'error' : 'upload folder doenst exist', 'fatal': True}))
             return False
         
         self.filename = StringSanitizer.sanitize(file_info['name'])
         self.tmp_filename = self.filename + '.tmp' + str(randint(100000, 999999))
-        logging.debug('tmp upload path: {}'.format(self.tmp_file_path()))
+        logger.debug('tmp upload path: {}'.format(self.tmp_file_path()))
 
         if not os.path.exists(self.tmp_file_path()):
             self.filesize = file_info['size']
@@ -532,7 +534,7 @@ class CuemsUpload(StringSanitizer):
             await self.message_sender(json.dumps({"ready" : True}))
         else:
             await self.message_sender(json.dumps({'error' : 'file allready exists', 'fatal': True}))
-            logging.error("file allready exists")
+            logger.error("file allready exists")
 
     async def process_upload_packet(self, bin_data):
 
@@ -560,10 +562,10 @@ class CuemsUpload(StringSanitizer):
             
             await self.server.event_loop.run_in_executor(self.server.executor, CuemsMedia.new,  self.tmp_file_path(), self.filename)
             self.tmp_filename = None
-            logging.debug('upload completed')
+            logger.debug('upload completed')
             await self.message_sender(json.dumps({"close" : True}))
         except Exception as e:
-            logging.error("error: {} {}".format(type(e), e))
+            logger.error("error: {} {}".format(type(e), e))
             await self.message_sender(json.dumps({'error' : 'error saving file', 'fatal': True}))
 
     def check_file_integrity(self, path, original_md5):
@@ -584,6 +586,6 @@ class CuemsUpload(StringSanitizer):
         try:
             if self.tmp_file_path():
                 os.remove(self.tmp_file_path())  # TODO: change to pathlib ?  
-                logging.debug('cleaning tmp upload file on object destruction: ({})'.format(self.tmp_file_path()))
+                logger.debug('cleaning tmp upload file on object destruction: ({})'.format(self.tmp_file_path()))
         except FileNotFoundError:
             pass
