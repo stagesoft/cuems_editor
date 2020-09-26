@@ -4,6 +4,7 @@ import time
 import uuid
 import os
 import shutil
+import json
 
 from ..log import *
 from .CuemsUtils import StringSanitizer, MoveVersioned, LIBRARY_PATH
@@ -210,8 +211,12 @@ class CuemsProject(StringSanitizer):
 
     @staticmethod
     def load(uuid):
-        project = Project.get(Project.uuid==uuid)
-        
+        try:
+            project = Project.get(Project.uuid==uuid)
+            return CuemsProject.load_xml(project.unix_name)
+        except DoesNotExist:
+            raise NonExistentItemError("item with uuid: {} does not exit".format(uuid))
+
     @staticmethod
     def list():
         project_list = list()
@@ -239,6 +244,7 @@ class CuemsProject(StringSanitizer):
             with db.atomic() as transaction:
                 try:
                     project.update(name=data['CuemsScript']['name'], modified=now_formated()).execute()
+                    CuemsProject.save_xml(project.unix_name, data)
                     return 'updated'
                 except Exception as e:
                     logger.error("error: {} {} triying to update  project, rolling back database update".format(type(e), e))
@@ -256,12 +262,8 @@ class CuemsProject(StringSanitizer):
             try:
                 Project.create(uuid=uuid, unix_name=unix_name, name=data['CuemsScript']['name'], created=now_formated(), modified=now_formated())
                 os.mkdir(os.path.join(CuemsProject.projects_path, unix_name))
+                CuemsProject.save_xml(unix_name, data)
                 
-                print(data)
-
-
-                with open(os.path.join(CuemsProject.projects_path, unix_name, 'script.xml'), 'w') as f:
-                    f.write('bla')
                 return 'new'
             except Exception as e:
                 logger.error("error: {} {} triying to make new  project, rolling back database insert".format(type(e), e))
@@ -323,3 +325,13 @@ class CuemsProject(StringSanitizer):
                 logger.error("error: {} {}; triying to delete project to trash, rolling back database".format(type(e), e))
                 transaction.rollback()
                 raise e
+
+    @staticmethod
+    def save_xml(unix_name, data):
+        with open(os.path.join(CuemsProject.projects_path, unix_name, 'script.json'), 'w') as f:
+            json.dump(data, f)
+
+    @staticmethod
+    def load_xml(unix_name):
+        with open(os.path.join(CuemsProject.projects_path, unix_name, 'script.json'), 'r') as f:
+            return json.load(f)

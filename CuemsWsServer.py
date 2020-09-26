@@ -147,10 +147,18 @@ class CuemsWsServer():
             message = self.counter_event()
             for user in self.users:
                 await user.outgoing.put(message)
-            
-    async def notify_others(self, calling_user, type, project_uuid=None):
+
+    async def notify_others_list_changes(self, calling_user, list_type):
         if self.users:  #notify others, not the user trigering the action, and only if the have same project loaded
-            message = self.users_event(type, project_uuid)
+            message = json.dumps({"type": "list_update", "value": list_type})
+            for user, project in self.users.items():
+                if user is not calling_user:
+                    await user.outgoing.put(message)
+                    logger.debug('notifing {} {}'.format(user, list_type))
+            
+    async def notify_others_same_project(self, calling_user, msg_type, project_uuid=None):
+        if self.users:  #notify others, not the user trigering the action, and only if the have same project loaded
+            message = json.dumps({"type" : "project_update", "value" : project_uuid})
             for user, project in self.users.items():
                 if user is not calling_user:
                     if project_uuid is not None:
@@ -180,7 +188,7 @@ class CuemsWsServer():
         if type == "users":
             return json.dumps({"type": type, "value": len(self.users)})
         else:
-            return json.dumps({"type": type, "uuid": uuid, "value" : "modified in server"})
+            return json.dumps({"type": type, "uuid": uuid, "value" : "modified in server"}) # TODO: not used
 
     def exception_handler(self, loop, context):
         logger.debug("Caught the following exception: (ignore if on closing)")
@@ -301,7 +309,6 @@ class CuemsWsUser():
             project = await self.server.event_loop.run_in_executor(self.server.executor, self.load_project, project_uuid)
             msg = json.dumps({"type":"project", "value":project})
             await self.outgoing.put(msg)
-            await self.notify_user("project loaded")
             self.server.users[self] = project_uuid
         except Exception as e:
             logger.error("error: {} {}".format(type(e), e))
@@ -317,10 +324,11 @@ class CuemsWsUser():
             return_message = await self.server.event_loop.run_in_executor(self.server.executor, self.save_project, project_uuid, project)
             self.server.users[self] = project_uuid
             await self.notify_user(uuid=project_uuid, action="project_save")
-            await self.server.notify_others(self, "project_modified")
+            await self.server.notify_others_list_changes(self, "project_list")
+            await self.server.notify_others_same_project(self, "project_modified", project_uuid)
         except Exception as e:
             logger.error("error: {} {}".format(type(e), e))
-            await self.notify_error_to_user(str(e), uuid=project_uuid, action="project_save")
+            await self.notify_error_to_user((str(type(e)) + str(e)), uuid=project_uuid, action="project_save")
 
     async def list_project_trash(self):
         logger.info("user {} loading project trash list".format(id(self.websocket)))
@@ -338,7 +346,9 @@ class CuemsWsUser():
             await self.server.event_loop.run_in_executor(self.server.executor, self.delete_project, project_uuid)
 
             await self.notify_user(uuid=project_uuid, action="project_delete")
-            await self.server.notify_others(self, "project_deleted", project_uuid=project_uuid)
+            await self.server.notify_others_same_project(self, "project_update", project_uuid=project_uuid)
+            await self.server.notify_others_list_changes(self, "project_list")
+            await self.server.notify_others_list_changes(self, "project_trash_list")
         except Exception as e:
             logger.error("error: {} {}".format(type(e), e))
             await self.notify_error_to_user(str(e), uuid=project_uuid, action="project_delete")
@@ -350,6 +360,8 @@ class CuemsWsUser():
             await self.server.event_loop.run_in_executor(self.server.executor, self.restore_project, project_uuid)
 
             await self.notify_user(uuid=project_uuid, action="project_restore")
+            await self.server.notify_others_list_changes(self, "project_list")
+            await self.server.notify_others_list_changes(self, "project_trash_list")
         except Exception as e:
             logger.error("error: {} {}".format(type(e), e))
             await self.notify_error_to_user(str(e), uuid=project_uuid, action="project_restore")
@@ -361,6 +373,7 @@ class CuemsWsUser():
             await self.server.event_loop.run_in_executor(self.server.executor, self.delete_project_trash, project_uuid)
 
             await self.notify_user(uuid=project_uuid, action="project_trash_delete")
+            await self.server.notify_others_list_changes(self, "project_trash_list")
         except Exception as e:
             logger.error("error: {} {}".format(type(e), e))
             await self.notify_error_to_user(str(e), uuid=project_uuid, action="project_trash_delete")
@@ -401,6 +414,8 @@ class CuemsWsUser():
             logger.debug("user {} deleting file: {}".format(id(self.websocket), file_uuid))
             await self.server.event_loop.run_in_executor(self.server.executor, self.delete_file, file_uuid)
             await self.notify_user(uuid=file_uuid, action="file_delete")
+            await self.server.notify_others_list_changes(self, "file_list")
+            await self.server.notify_others_list_changes(self, "file_trash_list")
         except Exception as e:
             logger.error("error: {} {}".format(type(e), e))
             await self.notify_error_to_user(str(e), uuid=file_uuid, action="file_delete")
@@ -410,6 +425,8 @@ class CuemsWsUser():
             logger.debug("user {} restoring file: {}".format(id(self.websocket), file_uuid))
             await self.server.event_loop.run_in_executor(self.server.executor, self.restore_file, file_uuid)
             await self.notify_user(uuid=file_uuid, action="file_restore")
+            await self.server.notify_others_list_changes(self, "file_list")
+            await self.server.notify_others_list_changes(self, "file_trash_list")
         except Exception as e:
             logger.error("error: {} {}".format(type(e), e))
             await self.notify_error_to_user(str(e), uuid=file_uuid, action="file_restore")
@@ -419,6 +436,7 @@ class CuemsWsUser():
             logger.info("user {} deleting file from trash: {}".format(id(self.websocket), file_uuid))
             await self.server.event_loop.run_in_executor(self.server.executor, self.delete_file_trash, file_uuid)
             await self.notify_user(uuid=file_uuid, action="file_trash_delete")
+            await self.server.notify_others_list_changes(self, "file_trash_list")
         except Exception as e:
             logger.error("error: {} {}".format(type(e), e))
             await self.notify_error_to_user(str(e), uuid=file_uuid, action="file_trash_delete")
@@ -431,11 +449,7 @@ class CuemsWsUser():
     
     def load_project(self, project_uuid):
         logger.info("loading project: {}".format(project_uuid))
-        for elem in self.server.projects:
-            if elem['CuemsScript']['uuid'] == project_uuid:
-                logger.debug("loading project: {}".format(elem))
-                return elem
-        raise NonExistentItemError('Can not find project uuid for loading', uuid=project_uuid, action="file_delete")
+        return CuemsProject.load(project_uuid)
 
     def save_project(self, project_uuid, data):
         logger.debug('saving project, uuid:{}, data:{}'.format(project_uuid, data))
@@ -564,6 +578,7 @@ class CuemsUpload(StringSanitizer):
             self.tmp_filename = None
             logger.debug('upload completed')
             await self.message_sender(json.dumps({"close" : True}))
+            await self.server.notify_others_list_changes(None, "file_list")
         except Exception as e:
             logger.error("error: {} {}".format(type(e), e))
             await self.message_sender(json.dumps({'error' : 'error saving file', 'fatal': True}))
