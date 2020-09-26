@@ -231,45 +231,48 @@ class CuemsWsUser():
                 logger.error("error: {} {}".format(type(e), e))
                 await self.notify_error_to_user('error decoding json') 
                 continue
-            
-            if "action" not in data:
-                logger.error("unsupported event: {}".format(data))
-                await self.notify_error_to_user("unsupported event: {}".format(data))
-            elif data["action"] == "minus":
-                self.server.state["value"] -= 1
-                await self.server.notify_state()
-            elif data["action"] == "plus":
-                self.server.state["value"] += 1
-                await self.server.notify_state()
-            elif data["action"] == "project_load":
-                await self.send_project(data["value"])
-            elif data["action"] == "project_save":
-                await self.received_project(data["value"])
-            elif data["action"] == "project_delete":
-                await self.request_delete_project(data["value"])
-            elif data["action"] == "project_restore":
-                await self.request_restore_project(data["value"])
-            elif data["action"] == "project_trash_delete":
-                await self.request_delete_project_trash(data["value"])
-            elif data["action"] == "project_list":
-                await self.list_project()
-            elif data["action"] == "file_list":
-                await self.list_file()
-            elif data["action"] == "project_trash_list":
-                await self.list_project_trash()
-            elif data["action"] == "file_trash_list":
-                await self.list_file_trash()
-            elif data["action"] == "file_save":
-                await self.received_file_data(data["value"])
-            elif data["action"] == "file_delete":
-                await self.request_delete_file(data["value"])
-            elif data["action"] == "file_restore":
-                await self.request_restore_file(data["value"])
-            elif data["action"] == "file_trash_delete":
-                await self.request_delete_file_trash(data["value"])
-            else:
-                logger.error("unsupported action: {}".format(data))
-                await self.notify_error_to_user("unsupported action: {}".format(data))
+            try:
+                if "action" not in data:
+                    logger.error("unsupported event: {}".format(data))
+                    await self.notify_error_to_user("unsupported event: {}".format(data))
+                elif data["action"] == "minus":
+                    self.server.state["value"] -= 1
+                    await self.server.notify_state()
+                elif data["action"] == "plus":
+                    self.server.state["value"] += 1
+                    await self.server.notify_state()
+                elif data["action"] == "project_load":
+                    await self.send_project(data["value"])
+                elif data["action"] == "project_save":
+                    await self.received_project(data["value"])
+                elif data["action"] == "project_delete":
+                    await self.request_delete_project(data["value"])
+                elif data["action"] == "project_restore":
+                    await self.request_restore_project(data["value"])
+                elif data["action"] == "project_trash_delete":
+                    await self.request_delete_project_trash(data["value"])
+                elif data["action"] == "project_list":
+                    await self.list_project()
+                elif data["action"] == "file_list":
+                    await self.list_file()
+                elif data["action"] == "project_trash_list":
+                    await self.list_project_trash()
+                elif data["action"] == "file_trash_list":
+                    await self.list_file_trash()
+                elif data["action"] == "file_save":
+                    await self.received_file_data(data["value"])
+                elif data["action"] == "file_delete":
+                    await self.request_delete_file(data["value"])
+                elif data["action"] == "file_restore":
+                    await self.request_restore_file(data["value"])
+                elif data["action"] == "file_trash_delete":
+                    await self.request_delete_file_trash(data["value"])
+                else:
+                    logger.error("unsupported action: {}".format(data))
+                    await self.notify_error_to_user("unsupported action: {}".format(data))
+            except Exception as e:
+                logger.error("error: {} {}".format(type(e), e))
+                await self.notify_error_to_user('error processing request')
 
 
     async def producer(self):
@@ -284,11 +287,11 @@ class CuemsWsUser():
             await self.outgoing.put(json.dumps({"type": action, "value": uuid}))
 
     async def notify_error_to_user(self, msg=None, uuid=None, action=None):
-        if (uuid is None) and (action is None) and (msg is not None):
+        if (msg is not None) and (uuid is None) and (action is None):
             await self.outgoing.put(json.dumps({"type": "error", "value": msg}))
-        elif(uuid is None) and (action is not None) and (msg is not None):
+        elif (action is not None) and (msg is not None) and (uuid is None):
             await self.outgoing.put(json.dumps({"type": "error", "action": action, "value": msg}))
-        else:
+        elif (action is not None) and (msg is not None) and (uuid is not None):
             await self.outgoing.put(json.dumps({"type": "error", "uuid": uuid, "action": action, "value": msg}))
 
 
@@ -317,6 +320,7 @@ class CuemsWsUser():
     async def received_project(self, data):
         try:
             project = data
+            project_uuid = None
             project_uuid = project['CuemsScript']['uuid']
 
             logger.info("user {} saving project {}".format(id(self.websocket), project_uuid))
