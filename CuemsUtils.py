@@ -1,8 +1,16 @@
 import os
 import shutil
+import getpass
 from ..log import logger
-LIBRARY_PATH = os.path.join('/home/ion/Documents', 'cuems_library')
 
+username = getpass.getuser()
+if os.path.exists(os.path.join('/home', username, 'cuems_library')):   # TODO: this is temporal
+    LIBRARY_PATH = os.path.join('/home', username, 'cuems_library')
+else:
+    username = "stagelab"
+    LIBRARY_PATH = os.path.join('/home', username, 'cuems_library')
+
+logger.debug('library path set to : {}'.format(LIBRARY_PATH))
 
 class StringSanitizer():
     
@@ -33,4 +41,3 @@ class MoveVersioned():
                 dest_filename = base + "-{:03d}".format(i) + ext
                 continue    
         return dest_filename
-# %%
