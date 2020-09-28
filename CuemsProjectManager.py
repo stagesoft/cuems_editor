@@ -243,7 +243,9 @@ class CuemsProject(StringSanitizer):
             project = Project.get(Project.uuid==uuid)
             with db.atomic() as transaction:
                 try:
-                    project.update(name=data['CuemsScript']['name'], modified=now_formated()).execute()
+                    project.name=data['CuemsScript']['name']
+                    project.modified=now_formated()
+                    project.save()
                     CuemsProject.save_xml(project.unix_name, data)
                     return 'updated'
                 except Exception as e:
