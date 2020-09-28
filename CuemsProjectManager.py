@@ -10,6 +10,10 @@ from ..log import *
 from .CuemsUtils import StringSanitizer, MoveVersioned, LIBRARY_PATH
 from .CuemsErrors import *
 from .. import DictParser
+from .. import CuemsParser
+from ..XmlBuilder import XmlBuilder
+from .. import XmlReader, XmlWriter
+
 
 pewee_logger = logging.getLogger('peewee')
 
@@ -330,10 +334,16 @@ class CuemsProject(StringSanitizer):
 
     @staticmethod
     def save_xml(unix_name, data):
-        with open(os.path.join(CuemsProject.projects_path, unix_name, 'script.json'), 'w') as f:
-            json.dump(data, f)
+        store = CuemsParser(data).parse()
+        xml_data = XmlBuilder(store).build()
+        writer = XmlWriter(schema = '/home/ion/src/cuems/python/osc-control/src/cuems/cues.xsd', xmlfile = (os.path.join(CuemsProject.projects_path, unix_name, 'script.xml')))
+        writer.write(xml_data)
+
 
     @staticmethod
     def load_xml(unix_name):
-        with open(os.path.join(CuemsProject.projects_path, unix_name, 'script.json'), 'r') as f:
-            return json.load(f)
+        reader = XmlReader(schema = '/home/ion/src/cuems/python/osc-control/src/cuems/cues.xsd', xmlfile = (os.path.join(CuemsProject.projects_path, unix_name, 'script.xml')))
+        return reader.read()
+        
+
+        
