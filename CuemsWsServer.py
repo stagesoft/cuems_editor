@@ -60,7 +60,8 @@ class CuemsWsServer():
         self.event_loop.close()
         
     def stop(self):
-        os.kill(self.process.pid, signal.SIGTERM)
+        #os.kill(self.process.pid, signal.SIGTERM)
+        self.process.terminate()
         self.process.join()
         logging.info('ws process joined')
         
