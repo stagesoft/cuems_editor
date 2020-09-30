@@ -334,10 +334,8 @@ class CuemsProject(StringSanitizer):
 
     @staticmethod
     def save_xml(unix_name, data):
-        store = CuemsParser(data).parse()
-        xml_data = XmlBuilder(store).build()
         writer = XmlWriter(schema = '/home/ion/src/cuems/python/osc-control/src/cuems/cues.xsd', xmlfile = (os.path.join(CuemsProject.projects_path, unix_name, 'script.xml')))
-        writer.write(xml_data)
+        writer.write_from_dict(data)
 
 
     @staticmethod
