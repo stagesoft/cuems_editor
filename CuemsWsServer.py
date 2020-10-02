@@ -33,9 +33,11 @@ logger_ws_server.addHandler(handler)
 
 logger_asyncio = logging.getLogger('asyncio')
 logger_asyncio.setLevel(logging.INFO)  # asyncio debug level 
+logger_asyncio.addHandler(handler)
 
 logger_ws = logging.getLogger('websockets')
 logger_ws.setLevel(logging.INFO)  # websockets debug level,  in debug prints all frames, also binary frames! 
+logger_ws.addHandler(handler)
 
 class CuemsWsServer():
     
