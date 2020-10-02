@@ -17,7 +17,7 @@ from ..log import *
 
 from .CuemsProjectManager import CuemsMedia, CuemsProject
 from .CuemsErrors import *
-from .CuemsUtils import StringSanitizer, LIBRARY_PATH
+from .CuemsUtils import StringSanitizer, CuemsLibraryMaintenance, LIBRARY_PATH
 
 
 

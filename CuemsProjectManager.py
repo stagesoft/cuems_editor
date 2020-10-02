@@ -7,7 +7,7 @@ import shutil
 import json
 
 from ..log import *
-from .CuemsUtils import StringSanitizer, MoveVersioned, LIBRARY_PATH
+from .CuemsUtils import StringSanitizer, MoveVersioned, CuemsLibraryMaintenance, LIBRARY_PATH
 from .CuemsErrors import *
 from .. import DictParser
 from .. import CuemsParser
@@ -95,7 +95,7 @@ class ProjectMedia(BaseModel):
                 .order_by(Media.created))
 
 
-db.create_tables([Project, Project_Trash, Media, Media_Trash, ProjectMedia])
+
 
 class CuemsMedia(StringSanitizer):
     
@@ -113,6 +113,8 @@ class CuemsMedia(StringSanitizer):
             except Exception as e:
                 logger.error("error: {} {} triying to move new file, rolling back database insert".format(type(e), e))
                 transaction.rollback()
+                if not os.path.exists(os.path.join(CuemsMedia.media_path, dest_filename)):
+                    os.remove(os.path.join(CuemsMedia.media_path, dest_filename))
                 raise e
 
     @staticmethod
@@ -168,6 +170,8 @@ class CuemsMedia(StringSanitizer):
             except Exception as e:
                 logger.error("error: {} {}; triying to move file to trash, rolling back database".format(type(e), e))
                 transaction.rollback()
+                if os.path.exists(os.path.join(CuemsMedia.trash_path, dest_filename)):
+                    shutil.move( os.path.join(CuemsMedia.trash_path, dest_filename), os.path.join(CuemsMedia.media_path, media.unix_name))
                 raise e
 
     @staticmethod
@@ -187,6 +191,8 @@ class CuemsMedia(StringSanitizer):
             except Exception as e:
                 logger.error("error: {} {}; triying to move file to trash, rolling back database".format(type(e), e))
                 transaction.rollback()
+                if os.path.exists(os.path.join(CuemsMedia.media_path, dest_filename)):
+                    shutil.move( os.path.join(CuemsMedia.media_path, dest_filename), os.path.join(CuemsMedia.trash_path, media_trash.unix_name))
                 raise e
 
     @staticmethod
@@ -199,8 +205,8 @@ class CuemsMedia(StringSanitizer):
         with db.atomic() as transaction:
             try:
                 file_path = os.path.join(CuemsMedia.trash_path, media.unix_name)
-                os.remove(file_path)
                 media.delete_instance()
+                os.remove(file_path)
                 logger.debug('deleting media from trash: {}'.format(media))
             except Exception as e:
                 logger.error("error: {} {}; triying to delete file from trash, rolling back database".format(type(e), e))
@@ -273,6 +279,8 @@ class CuemsProject(StringSanitizer):
                 return 'new'
             except Exception as e:
                 logger.error("error: {} {} triying to make new  project, rolling back database insert".format(type(e), e))
+                if not os.path.exists(os.path.join(CuemsProject.projects_path, unix_name)):
+                    shutil.rmtree(os.path.join(CuemsProject.projects_path, unix_name) )                
                 transaction.rollback()
                 raise e
 
@@ -293,6 +301,8 @@ class CuemsProject(StringSanitizer):
             except Exception as e:
                 logger.error("error: {} {}; triying to move file to trash, rolling back database".format(type(e), e))
                 transaction.rollback()
+                if os.path.exists(os.path.join(CuemsProject.trash_path, dest_filename)):
+                    shutil.move( os.path.join(CuemsProject.trash_path, dest_filename), os.path.join(CuemsProject.projects_path, project.unix_name))
                 raise e
     
     @staticmethod
@@ -304,14 +314,16 @@ class CuemsProject(StringSanitizer):
         
         with db.atomic() as transaction:
             try:
-                file_path = os.path.join(CuemsProject.trash_path, project_trash.unix_name)
-                dest_filename = MoveVersioned.move(file_path, CuemsProject.projects_path, project_trash.unix_name)
+                project_path = os.path.join(CuemsProject.trash_path, project_trash.unix_name)
+                dest_filename = MoveVersioned.move(project_path, CuemsProject.projects_path, project_trash.unix_name)
                 Project.create(uuid=project_trash.uuid, name=project_trash.name, unix_name=dest_filename, created=project_trash.created, modified=now_formated())
                 project_trash.delete_instance()
                 logger.debug('deleting instance from table: {}'.format(project_trash))
             except Exception as e:
                 logger.error("error: {} {}; triying to move file to trash, rolling back database".format(type(e), e))
                 transaction.rollback()
+                if os.path.exists(os.path.join(CuemsProject.projects_path, dest_filename)):
+                    shutil.move( os.path.join(CuemsProject.projects_path, dest_filename), os.path.join(CuemsProject.trash_path, project_path.unix_name))
                 raise e
 
     @staticmethod
@@ -326,6 +338,7 @@ class CuemsProject(StringSanitizer):
                 project_path = os.path.join(CuemsProject.trash_path, project.unix_name)
                 shutil.rmtree(project_path)  #non empty dir, must use rmtree
                 project.delete_instance()
+                shutil.rmtree(project_path)  #non empty dir, must use rmtree
                 logger.debug('deleting project from trash: {}'.format(project))
             except Exception as e:
                 logger.error("error: {} {}; triying to delete project to trash, rolling back database".format(type(e), e))
