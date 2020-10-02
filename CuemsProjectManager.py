@@ -1,7 +1,7 @@
 from peewee import *
 from datetime import datetime
 import time
-import uuid
+import uuid as uuid_module
 import os
 import shutil
 import json
@@ -111,7 +111,7 @@ class CuemsMedia(StringSanitizer):
         with db.atomic() as transaction:
             try:
                 dest_filename = MoveVersioned.move(tmp_file_path, CuemsMedia.media_path, filename)
-                Media.create(uuid=uuid.uuid1(), unix_name=dest_filename, created=now_formated(), modified=now_formated())
+                Media.create(uuid=uuid_module.uuid1(), unix_name=dest_filename, created=now_formated(), modified=now_formated())
             except Exception as e:
                 logger.error("error: {} {} triying to move new file, rolling back database insert".format(type(e), e))
                 transaction.rollback()
@@ -264,11 +264,12 @@ class CuemsProject(StringSanitizer):
         return project_trash_list
 
     @staticmethod
-    def save(uuid, data):   #TODO: check uuid format
+    def update(uuid, data):   #TODO: check uuid format
         try:
-            project = Project.get(Project.uuid==uuid)
+            
             with db.atomic() as transaction:
                 try:
+                    project = Project.get(Project.uuid==uuid)
                     project.name=data['CuemsScript']['name']
                     project.modified=now_formated()
                     project.save()
@@ -277,27 +278,27 @@ class CuemsProject(StringSanitizer):
                     project_object = CuemsProject.parse_and_add_media_relations(project, data)
                     
                     CuemsProject.save_xml(project.unix_name, project_object)
-                    return 'updated'
                 except Exception as e:
                     logger.error("error: {} {} triying to update  project, rolling back database update".format(type(e), e))
                     transaction.rollback()
                     raise e
             
         except DoesNotExist:
-            logger.debug('project uuid not in DB, saving as new')
-            return CuemsProject.new( uuid, data)
+            raise NonExistentItemError("item with uuid: {} does not exit".format(uuid))
 
     @staticmethod
-    def new(uuid, data):
+    def new(data):
         unix_name = StringSanitizer.sanitize(data['CuemsScript']['name'])
+        project_uuid = str(uuid_module.uuid1())
+        data['CuemsScript']['uuid']= project_uuid
         with db.atomic() as transaction:
             try:
-                project = Project.create(uuid=uuid, unix_name=unix_name, name=data['CuemsScript']['name'], created=now_formated(), modified=now_formated())
+                project = Project.create(uuid=project_uuid, unix_name=unix_name, name=data['CuemsScript']['name'], created=now_formated(), modified=now_formated())
                 os.mkdir(os.path.join(CuemsProject.projects_path, unix_name))
                 project_object = CuemsProject.parse_and_add_media_relations(project, data)
 
                 CuemsProject.save_xml(unix_name, project_object)
-                return 'new'
+                return project_uuid
             except Exception as e:
                 logger.error("error: {} {} ;triying to make new  project, rolling back database insert".format(type(e), e))
                 if os.path.exists(os.path.join(CuemsProject.projects_path, unix_name)):

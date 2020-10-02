@@ -323,11 +323,15 @@ class CuemsWsUser():
         try:
             project = data
             project_uuid = None
-            project_uuid = project['CuemsScript']['uuid']
+            try:
+                project_uuid = project['CuemsScript']['uuid']
+                await self.server.event_loop.run_in_executor(self.server.executor, self.update_project, project_uuid, project)
+            except KeyError:
+                project_uuid = await self.server.event_loop.run_in_executor(self.server.executor, self.new_project, project)
 
             logger.info("user {} saving project {}".format(id(self.websocket), project_uuid))
             
-            return_message = await self.server.event_loop.run_in_executor(self.server.executor, self.save_project, project_uuid, project)
+            
             self.server.users[self] = project_uuid
             await self.notify_user(uuid=project_uuid, action="project_save")
             await self.server.notify_others_list_changes(self, "project_list")
@@ -457,9 +461,13 @@ class CuemsWsUser():
         logger.info("loading project: {}".format(project_uuid))
         return CuemsProject.load(project_uuid)
 
-    def save_project(self, project_uuid, data):
+    def new_project(self, data):
+        logger.debug('saving new project, data:{}'.format(data))
+        return CuemsProject.new(data)
+
+    def update_project(self, project_uuid, data):
         logger.debug('saving project, uuid:{}, data:{}'.format(project_uuid, data))
-        return CuemsProject.save(project_uuid, data)
+        CuemsProject.update(project_uuid, data)
 
     def delete_project(self, project_uuid):
         CuemsProject.delete(project_uuid)
