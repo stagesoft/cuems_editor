@@ -7,7 +7,7 @@ import shutil
 import json
 
 from ..log import *
-from .CuemsUtils import StringSanitizer, MoveVersioned, CuemsLibraryMaintenance, LIBRARY_PATH
+from .CuemsUtils import StringSanitizer, CopyMoveVersioned, CuemsLibraryMaintenance, LIBRARY_PATH
 from .CuemsErrors import *
 from .. import DictParser
 from .. import CuemsParser
@@ -40,10 +40,11 @@ class Project(BaseModel):
 
     def medias(self):
         return (Media
-                .select(fn.COUNT(ProjectMedia.id).alias('count'))
+                .select(Media.uuid, Media.name, Media.unix_name, fn.COUNT(ProjectMedia.id).alias('count'))
                 .join(ProjectMedia, on=ProjectMedia.media)
                 .where(ProjectMedia.project == self)
-                .order_by(Media.created))
+                .order_by(Media.created)
+                .group_by(Media.uuid))
 
 class Project_Trash(BaseModel):
     uuid = UUIDField(index = True, unique = True, primary_key = True)
@@ -62,10 +63,11 @@ class Media(BaseModel):
 
     def projects(self):
         return (Project
-                .select(fn.COUNT(ProjectMedia.id).alias('count'))
+                .select(Project.uuid, Project.name, Project.unix_name, fn.COUNT(ProjectMedia.id).alias('count'))
                 .join(ProjectMedia, on=ProjectMedia.project)
                 .where(ProjectMedia.media == self)
-                .order_by(Project.created))
+                .order_by(Project.created)
+                .group_by(Project.uuid))
 
     def orphan(self):
         return (Media
@@ -110,7 +112,7 @@ class CuemsMedia(StringSanitizer):
         
         with db.atomic() as transaction:
             try:
-                dest_filename = MoveVersioned.move(tmp_file_path, CuemsMedia.media_path, filename)
+                dest_filename = CopyMoveVersioned.move(tmp_file_path, CuemsMedia.media_path, filename)
                 Media.create(uuid=uuid_module.uuid1(), unix_name=dest_filename, created=now_formated(), modified=now_formated())
             except Exception as e:
                 logger.error("error: {} {} triying to move new file, rolling back database insert".format(type(e), e))
@@ -159,66 +161,85 @@ class CuemsMedia(StringSanitizer):
             
         except DoesNotExist:
             raise NonExistentItemError("item with uuid: {} does not exit".format(uuid))
+
+    @staticmethod
+    def load_meta(uuid):
+        try:
+            media = Media.get(Media.uuid==uuid)
+            file_meta = dict()
+            project_dict = dict()
+            media_projects_query = media.projects()
+            for project in media_projects_query:
+                project_dict[str(project.uuid)] = project.name
+            file_meta[uuid] = {'projects' : project_dict }
+            return file_meta
+            
+        except DoesNotExist:
+            raise NonExistentItemError("item with uuid: {} does not exit".format(uuid))
+
         
     @staticmethod
     def delete(uuid):
         try:
             media = Media.get(Media.uuid==uuid)
+        
+
+            with db.atomic() as transaction:
+                try:
+                    file_path = os.path.join(CuemsMedia.media_path, media.unix_name)
+                    dest_filename = CopyMoveVersioned.move(file_path, CuemsMedia.trash_path, media.unix_name)
+                    Media_Trash.create(uuid=media.uuid, name=media.name, unix_name=dest_filename, created=media.created, modified=now_formated())
+                    media.delete_instance(recursive=True)
+                    logger.debug('deleting instance from table: {}'.format(media))
+                except Exception as e:
+                    logger.error("error: {} {}; triying to move file to trash, rolling back database".format(type(e), e))
+                    transaction.rollback()
+                    if os.path.exists(os.path.join(CuemsMedia.trash_path, dest_filename)):
+                        shutil.move( os.path.join(CuemsMedia.trash_path, dest_filename), os.path.join(CuemsMedia.media_path, media.unix_name))
+                    raise e
+
         except DoesNotExist:
             raise NonExistentItemError("item with uuid: {} does not exit".format(uuid))
-
-        with db.atomic() as transaction:
-            try:
-                file_path = os.path.join(CuemsMedia.media_path, media.unix_name)
-                dest_filename = MoveVersioned.move(file_path, CuemsMedia.trash_path, media.unix_name)
-                Media_Trash.create(uuid=media.uuid, name=media.name, unix_name=dest_filename, created=media.created, modified=now_formated())
-                media.delete_instance(recursive=True)
-                logger.debug('deleting instance from table: {}'.format(media))
-            except Exception as e:
-                logger.error("error: {} {}; triying to move file to trash, rolling back database".format(type(e), e))
-                transaction.rollback()
-                if os.path.exists(os.path.join(CuemsMedia.trash_path, dest_filename)):
-                    shutil.move( os.path.join(CuemsMedia.trash_path, dest_filename), os.path.join(CuemsMedia.media_path, media.unix_name))
-                raise e
 
     @staticmethod
     def restore(uuid):
         try:
             media_trash = Media_Trash.get(Media_Trash.uuid==uuid)
+        
+            with db.atomic() as transaction:
+                try:
+                    file_path = os.path.join(CuemsMedia.trash_path, media_trash.unix_name)
+                    dest_filename = CopyMoveVersioned.move(file_path, CuemsMedia.media_path, media_trash.unix_name)
+                    Media.create(uuid=media_trash.uuid, name=media_trash.name, unix_name=dest_filename, created=media_trash.created, modified=now_formated())
+                    media_trash.delete_instance()
+                    logger.debug('deleting instance from table: {}'.format(media_trash))
+                except Exception as e:
+                    logger.error("error: {} {}; triying to move file to trash, rolling back database".format(type(e), e))
+                    transaction.rollback()
+                    if os.path.exists(os.path.join(CuemsMedia.media_path, dest_filename)):
+                        shutil.move( os.path.join(CuemsMedia.media_path, dest_filename), os.path.join(CuemsMedia.trash_path, media_trash.unix_name))
+                    raise e
         except DoesNotExist:
             raise NonExistentItemError("item with uuid: {} does not exit".format(uuid))
-        
-        with db.atomic() as transaction:
-            try:
-                file_path = os.path.join(CuemsMedia.trash_path, media_trash.unix_name)
-                dest_filename = MoveVersioned.move(file_path, CuemsMedia.media_path, media_trash.unix_name)
-                Media.create(uuid=media_trash.uuid, name=media_trash.name, unix_name=dest_filename, created=media_trash.created, modified=now_formated())
-                media_trash.delete_instance()
-                logger.debug('deleting instance from table: {}'.format(media_trash))
-            except Exception as e:
-                logger.error("error: {} {}; triying to move file to trash, rolling back database".format(type(e), e))
-                transaction.rollback()
-                if os.path.exists(os.path.join(CuemsMedia.media_path, dest_filename)):
-                    shutil.move( os.path.join(CuemsMedia.media_path, dest_filename), os.path.join(CuemsMedia.trash_path, media_trash.unix_name))
-                raise e
 
     @staticmethod
     def delete_from_trash(uuid):
         try:
             media = Media_Trash.get(Media_Trash.uuid==uuid)
+
+            with db.atomic() as transaction:
+                try:
+                    file_path = os.path.join(CuemsMedia.trash_path, media.unix_name)
+                    media.delete_instance()
+                    os.remove(file_path)
+                    logger.debug('deleting media from trash: {}'.format(media))
+                except Exception as e:
+                    logger.error("error: {} {}; triying to delete file from trash, rolling back database".format(type(e), e))
+                    transaction.rollback()
+                    raise e
+
         except DoesNotExist:
             raise NonExistentItemError("item with uuid: {} does not exit".format(uuid))
-
-        with db.atomic() as transaction:
-            try:
-                file_path = os.path.join(CuemsMedia.trash_path, media.unix_name)
-                media.delete_instance()
-                os.remove(file_path)
-                logger.debug('deleting media from trash: {}'.format(media))
-            except Exception as e:
-                logger.error("error: {} {}; triying to delete file from trash, rolling back database".format(type(e), e))
-                transaction.rollback()
-                raise e
 
 
 class CuemsProject(StringSanitizer):
@@ -239,17 +260,10 @@ class CuemsProject(StringSanitizer):
     @staticmethod
     def list():
         project_list = list()
-
-        projects = (Project
-         .select(Project.uuid, Project.name, Project.unix_name, Project.created, Project.modified, fn.COUNT(ProjectMedia.id).alias('count'))
-         .join(ProjectMedia, JOIN.LEFT_OUTER)  # Joins tweet -> favorite.
-         .join(Media, JOIN.LEFT_OUTER, on=(Media.uuid==ProjectMedia.media))  # Joins user -> tweet.
-         .group_by(Project.uuid))
-
+        projects = Project.select()
         for project in projects:
-            project_dict = {str(project.uuid): {'name': project.name, 'unix_name': project.unix_name, 'created': project.created, 'modified': project.modified, 'files_used': project.count} }
-            for project_media in project.project_medias:
-                project_list.append(project_dict)
+            project_dict = {str(project.uuid): {'name': project.name, 'unix_name': project.unix_name, 'created': project.created, 'modified': project.modified} }
+            project_list.append(project_dict)
 
         return project_list
     
@@ -266,10 +280,9 @@ class CuemsProject(StringSanitizer):
     @staticmethod
     def update(uuid, data):   #TODO: check uuid format
         try:
-            
+            project = Project.get(Project.uuid==uuid)
             with db.atomic() as transaction:
                 try:
-                    project = Project.get(Project.uuid==uuid)
                     project.name=data['CuemsScript']['name']
                     project.modified=now_formated()
                     project.save()
@@ -307,71 +320,96 @@ class CuemsProject(StringSanitizer):
                 raise e
 
     @staticmethod
-    def delete(uuid):
+    def duplicate(uuid):
         try:
             project = Project.get(Project.uuid==uuid)
+            with db.atomic() as transaction:
+                try:
+                    project_path = os.path.join(CuemsProject.projects_path, project.unix_name)
+                    new_unix_name = CopyMoveVersioned.copy_dir(project_path, CuemsProject.projects_path, project.unix_name)
+                    project.unix_name = new_unix_name
+                    new_uuid = str(uuid_module.uuid1())
+                    project.uuid = new_uuid
+                    project.name = project.name + ' - Copy'
+                    project.modified=now_formated()
+                    project.save(force_insert=True)
+
+                    dup_project= Project.get(Project.uuid==new_uuid)
+                    data = CuemsProject.load_xml(dup_project.unix_name)
+                    project_object = CuemsProject.parse_and_add_media_relations(dup_project, data)
+                    return new_uuid
+                except Exception as e:
+                    logger.error("error: {} {}; triying to duplicate  project, rolling back database update".format(type(e), e))
+                    transaction.rollback()
+                    if os.path.exists(os.path.join(CuemsProject.projects_path, new_unix_name)):
+                        shutil.rmtree(os.path.join(CuemsProject.projects_path, new_unix_name))
+                    raise e
+            
         except DoesNotExist:
             raise NonExistentItemError("item with uuid: {} does not exit".format(uuid))
 
-        with db.atomic() as transaction:
-            try:
-                file_path = os.path.join(CuemsProject.projects_path, project.unix_name)
-                dest_filename = MoveVersioned.move(file_path, CuemsProject.trash_path, project.unix_name)
-                Project_Trash.create(uuid=project.uuid, name=project.name, unix_name=dest_filename, created=project.created, modified=now_formated())
-                project.delete_instance(recursive=True)
-                logger.debug('deleting instance from table: {}'.format(project))
-            except Exception as e:
-                logger.error("error: {} {}; triying to move file to trash, rolling back database".format(type(e), e))
-                transaction.rollback()
-                if os.path.exists(os.path.join(CuemsProject.trash_path, dest_filename)):
-                    shutil.move( os.path.join(CuemsProject.trash_path, dest_filename), os.path.join(CuemsProject.projects_path, project.unix_name))
-                raise e
+    @staticmethod
+    def delete(uuid):
+        try:
+            project = Project.get(Project.uuid==uuid)
+            with db.atomic() as transaction:
+                try:
+                    file_path = os.path.join(CuemsProject.projects_path, project.unix_name)
+                    dest_filename = CopyMoveVersioned.move(file_path, CuemsProject.trash_path, project.unix_name)
+                    Project_Trash.create(uuid=project.uuid, name=project.name, unix_name=dest_filename, created=project.created, modified=now_formated())
+                    project.delete_instance(recursive=True)
+                    logger.debug('deleting instance from table: {}'.format(project))
+                except Exception as e:
+                    logger.error("error: {} {}; triying to move file to trash, rolling back database".format(type(e), e))
+                    transaction.rollback()
+                    if os.path.exists(os.path.join(CuemsProject.trash_path, dest_filename)):
+                        shutil.move( os.path.join(CuemsProject.trash_path, dest_filename), os.path.join(CuemsProject.projects_path, project.unix_name))
+                    raise e
+
+        except DoesNotExist:
+            raise NonExistentItemError("item with uuid: {} does not exit".format(uuid))
     
     @staticmethod
     def restore(uuid):
         try:
             project_trash = Project_Trash.get(Project_Trash.uuid==uuid)
+        
+            with db.atomic() as transaction:
+                try:
+                    project_path = os.path.join(CuemsProject.trash_path, project_trash.unix_name)
+                    dest_filename = CopyMoveVersioned.move(project_path, CuemsProject.projects_path, project_trash.unix_name)
+                    Project.create(uuid=project_trash.uuid, name=project_trash.name, unix_name=dest_filename, created=project_trash.created, modified=now_formated())
+                    project_trash.delete_instance()
+                    project= Project.get(Project.uuid==uuid)
+                    data = CuemsProject.load_xml(project.unix_name)
+                    project_object = CuemsProject.parse_and_add_media_relations(project, data)
+                    logger.debug('deleting instance from table: {}'.format(project_trash))
+                except Exception as e:
+                    logger.error("error: {} {}; triying to move file to trash, rolling back database".format(type(e), e))
+                    transaction.rollback()
+                    if os.path.exists(os.path.join(CuemsProject.projects_path, dest_filename)):
+                        shutil.move( os.path.join(CuemsProject.projects_path, dest_filename), os.path.join(CuemsProject.trash_path, project_path.unix_name))
+                    raise e
         except DoesNotExist:
             raise NonExistentItemError("item with uuid: {} does not exit".format(uuid))
-        
-        with db.atomic() as transaction:
-            try:
-                project_path = os.path.join(CuemsProject.trash_path, project_trash.unix_name)
-                dest_filename = MoveVersioned.move(project_path, CuemsProject.projects_path, project_trash.unix_name)
-                Project.create(uuid=project_trash.uuid, name=project_trash.name, unix_name=dest_filename, created=project_trash.created, modified=now_formated())
-                project_trash.delete_instance()
-                project= Project.get(Project.uuid==uuid)
-
-                data = CuemsProject.load_xml(project.unix_name)
-
-                project_object = CuemsProject.parse_and_add_media_relations(project, data)
-                
-
-                logger.debug('deleting instance from table: {}'.format(project_trash))
-            except Exception as e:
-                logger.error("error: {} {}; triying to move file to trash, rolling back database".format(type(e), e))
-                transaction.rollback()
-                if os.path.exists(os.path.join(CuemsProject.projects_path, dest_filename)):
-                    shutil.move( os.path.join(CuemsProject.projects_path, dest_filename), os.path.join(CuemsProject.trash_path, project_path.unix_name))
-                raise e
 
     @staticmethod
     def delete_from_trash(uuid):
         try:
             project = Project_Trash.get(Project_Trash.uuid==uuid)
+
+            with db.atomic() as transaction:
+                try:
+                    project_path = os.path.join(CuemsProject.trash_path, project.unix_name)
+                    project.delete_instance()
+                    shutil.rmtree(project_path)  #non empty dir, must use rmtree
+                    logger.debug('deleting project from trash: {}'.format(project))
+                except Exception as e:
+                    logger.error("error: {} {}; triying to delete project to trash, rolling back database".format(type(e), e))
+                    transaction.rollback()
+                    raise e
         except DoesNotExist:
             raise NonExistentItemError("item with uuid: {} does not exit".format(uuid))
-
-        with db.atomic() as transaction:
-            try:
-                project_path = os.path.join(CuemsProject.trash_path, project.unix_name)
-                project.delete_instance()
-                shutil.rmtree(project_path)  #non empty dir, must use rmtree
-                logger.debug('deleting project from trash: {}'.format(project))
-            except Exception as e:
-                logger.error("error: {} {}; triying to delete project to trash, rolling back database".format(type(e), e))
-                transaction.rollback()
-                raise e
 
     @staticmethod
     def parse_and_add_media_relations(project, data):

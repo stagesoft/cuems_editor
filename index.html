@@ -475,6 +475,9 @@
                 case 'project':
                     content.value = JSON.stringify(data.value);
                     break;
+                case 'file_load_meta':
+                    content.value = JSON.stringify(data.value);
+                    break;
                 case 'project_save':
                     var element = document.createElement("div");
                     element.appendChild(document.createTextNode("project " + JSON.stringify(data.value) + " saved"));

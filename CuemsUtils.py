@@ -25,7 +25,7 @@ class StringSanitizer():
         keepcharacters = ('.','_')
         return "".join(c for c in _string if c.isalnum() or c in keepcharacters).rstrip().lower()
 
-class MoveVersioned():
+class CopyMoveVersioned():
 
     @staticmethod
     def move(orig_path, dest_path, dest_filename):
@@ -42,6 +42,21 @@ class MoveVersioned():
                 dest_filename = base + "-{:03d}".format(i) + ext
                 continue    
         return dest_filename
+
+    @staticmethod
+    def copy_dir(orig_path, dest_path, dest_dirname):
+        i = 0
+        orig_name = dest_dirname
+        while True:     
+            if not os.path.exists(os.path.join(dest_path, dest_dirname)):
+                logger.debug('copyin dir to: {}'.format(os.path.join(dest_path, dest_dirname)))
+                shutil.copytree( orig_path, os.path.join(dest_path, dest_dirname))
+                break
+            else:
+                i += 1
+                dest_dirname = orig_name + "-{:03d}".format(i)
+                continue    
+        return dest_dirname
 
 class CuemsLibraryMaintenance():
 

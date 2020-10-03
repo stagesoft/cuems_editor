@@ -9,7 +9,7 @@ Commands 													 ->	Responses
 																->  {"type" : "list_update", "value": "project_list"}
 																->  {"type" : "list_update", "value": "project_trash_list"}
 																->  {"type" : "list_update", "value": "file_list"}
-																->  {"typ"e : "list_update", "value": "file_trash_list"}
+																->  {"type" : "list_update", "value": "file_trash_list"}
 
 
 {"action" : "project_list"}  									->  {"type": "project_list", "value": "project_list_json"}
@@ -19,6 +19,7 @@ Commands 													 ->	Responses
 {"action" : "project_trash_list"}  							 	->  {"type": "project_trash_list", "value": "project_trash_list_json"}
 {"action" : "project_recover", "value" : "project_uuid"}  		->  {"type": "project_recover", "value":"project_uuid"}
 {"action" : "project_trash_delete", "value" : "project_uuid"}	->  {"type": "project_trash_delete", "value":"project_uuid"}
+{"action" : "project_duplicate", "value" : "project_uuid"}		->  {"type": "project_duplicate", "value":"project_uuid"}
 
 
 {"action" : "file_list"}  										->  {"type": "file_list", "value": "file_list_json"}
