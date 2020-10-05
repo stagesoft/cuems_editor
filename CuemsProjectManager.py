@@ -424,13 +424,13 @@ class CuemsProject(StringSanitizer):
     @staticmethod
     def save_xml(unix_name, project_object):
 
-        writer = XmlWriter(schema = '/home/ion/src/cuems/python/osc-control/src/cuems/cues.xsd', xmlfile = (os.path.join(CuemsProject.projects_path, unix_name, 'script.xml')))
+        writer = XmlWriter(schema = '/home/stagelab/src/cuems/osc_control/src/cuems/cues.xsd', xmlfile = (os.path.join(CuemsProject.projects_path, unix_name, 'script.xml')))
         writer.write_from_object(project_object)
 
 
     @staticmethod
     def load_xml(unix_name):
-        reader = XmlReader(schema = '/home/ion/src/cuems/python/osc-control/src/cuems/cues.xsd', xmlfile = (os.path.join(CuemsProject.projects_path, unix_name, 'script.xml')))
+        reader = XmlReader(schema = '/home/stagelab/src/cuems/osc_control/src/cuems/cues.xsd', xmlfile = (os.path.join(CuemsProject.projects_path, unix_name, 'script.xml')))
         return reader.read()
         
 
