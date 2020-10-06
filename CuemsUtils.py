@@ -16,13 +16,32 @@ logger.debug('library path set to : {}'.format(LIBRARY_PATH))
 class StringSanitizer():
     
     @staticmethod
-    def sanitize(_string):
+    def sanitize_file_name(_string):
         if len(_string) >= 240 :
             _string = _string[0:236] + _string[-4:] # return frist 236 characters + last 4 chars = total 240 of max 255. Leave room for versioning and .tmp
 
         _string = _string.replace(' ', '_')
         _string = _string.replace('-', '_')
         keepcharacters = ('.','_')
+        return "".join(c for c in _string if c.isalnum() or c in keepcharacters).rstrip().lower()
+
+    @staticmethod
+    def sanitize_dir_name(_string):
+        if len(_string) >= 240 :
+            _string = _string[0:236] + _string[-4:] # return frist 236 characters + last 4 chars = total 240 of max 255. Leave room for versioning and .tmp
+
+        _string = _string.replace(' ', '_')
+        _string = _string.replace('-', '_')
+        keepcharacters = ('_')
+        return "".join(c for c in _string if c.isalnum() or c in keepcharacters).rstrip().lower()
+    
+    @staticmethod
+    def sanitize_dir_permit_increment(_string):
+        if len(_string) >= 240 :
+            _string = _string[0:236] + _string[-4:] # return frist 236 characters + last 4 chars = total 240 of max 255. Leave room for versioning and .tmp
+
+        _string = _string.replace(' ', '_')
+        keepcharacters = ('_', '-')
         return "".join(c for c in _string if c.isalnum() or c in keepcharacters).rstrip().lower()
 
 class CopyMoveVersioned():
