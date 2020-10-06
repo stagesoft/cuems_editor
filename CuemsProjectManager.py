@@ -410,7 +410,8 @@ class CuemsProject(StringSanitizer):
                     project_trash.delete_instance()
                     project= Project.get(Project.uuid==uuid)
                     data = CuemsProject.load_xml(project.unix_name)
-                    project_object = CuemsProject.parse_and_add_media_relations(project, data)
+                    project_object = CuemsParser(data).parse()
+                    project_object = CuemsProject.add_media_relations(project, project_object, data)
                     logger.debug('deleting instance from table: {}'.format(project_trash))
                 except Exception as e:
                     logger.error("error: {} {}; triying to move file to trash, rolling back database".format(type(e), e))
