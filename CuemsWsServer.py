@@ -328,13 +328,18 @@ class CuemsWsUser():
 
     async def received_project(self, data, action):
         try:
-            project = data
             project_uuid = None
+            new_project = False
+
             try:
-                project_uuid = project['CuemsScript']['uuid']
-                await self.server.event_loop.run_in_executor(self.server.executor, self.update_project, project_uuid, project)
+                project_uuid = data['CuemsScript']['uuid']
             except KeyError:
-                project_uuid = await self.server.event_loop.run_in_executor(self.server.executor, self.new_project, project)
+                new_project = True
+
+            if new_project:
+                project_uuid = await self.server.event_loop.run_in_executor(self.server.executor, self.new_project, data)
+            else:
+                await self.server.event_loop.run_in_executor(self.server.executor, self.update_project, project_uuid, data)
 
             logger.info("user {} saving project {}".format(id(self.websocket), project_uuid))
             
@@ -612,7 +617,7 @@ class CuemsUpload(StringSanitizer):
             await self.message_sender(json.dumps({'error' : 'upload folder doenst exist', 'fatal': True}))
             return False
         
-        self.filename = StringSanitizer.sanitize(file_info['name'])
+        self.filename = StringSanitizer.sanitize_file_name(file_info['name'])
         self.tmp_filename = self.filename + '.tmp' + str(randint(100000, 999999))
         logger.debug('tmp upload path: {}'.format(self.tmp_file_path()))
 
