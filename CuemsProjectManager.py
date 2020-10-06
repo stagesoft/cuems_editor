@@ -38,9 +38,14 @@ class Project(BaseModel):
     created = DateTimeField()
     modified = DateTimeField()
 
+    @staticmethod
+    def all_fields():
+        return [Project.uuid, Project.name, Project.unix_name, Project.created, Project.modified]
+
+
     def medias(self):
         return (Media
-                .select(Media.uuid, Media.name, Media.unix_name, fn.COUNT(ProjectMedia.id).alias('count'))
+                .select( *Media.all_fields(), fn.COUNT(ProjectMedia.id).alias('count'))
                 .join(ProjectMedia, on=ProjectMedia.media)
                 .where(ProjectMedia.project == self)
                 .order_by(Media.created)
@@ -61,9 +66,13 @@ class Media(BaseModel):
     created = DateTimeField()
     modified = DateTimeField()
 
+    @staticmethod
+    def all_fields():
+        return [Media.uuid, Media.name, Media.unix_name, Media.created, Media.modified]
+
     def projects(self):
         return (Project
-                .select(Project.uuid, Project.name, Project.unix_name, fn.COUNT(ProjectMedia.id).alias('count'))
+                .select( *Project.all_fields(), fn.COUNT(ProjectMedia.id).alias('count'))
                 .join(ProjectMedia, on=ProjectMedia.project)
                 .where(ProjectMedia.media == self)
                 .order_by(Project.created)
@@ -112,11 +121,14 @@ class CuemsMedia(StringSanitizer):
         
         with db.atomic() as transaction:
             try:
+                dest_filename = None
                 dest_filename = CopyMoveVersioned.move(tmp_file_path, CuemsMedia.media_path, filename)
                 Media.create(uuid=uuid_module.uuid1(), unix_name=dest_filename, created=now_formated(), modified=now_formated())
             except Exception as e:
                 logger.error("error: {} {} triying to move new file, rolling back database insert".format(type(e), e))
                 transaction.rollback()
+                if dest_filename is None:  # if move or copy where not sucessfull with dont need to clean and can end here forwarding the exception, else continue cleaning and then forward the exception
+                        raise e
                 if os.path.exists(os.path.join(CuemsMedia.media_path, dest_filename)):
                     os.remove(os.path.join(CuemsMedia.media_path, dest_filename))
                 raise e
@@ -186,6 +198,7 @@ class CuemsMedia(StringSanitizer):
 
             with db.atomic() as transaction:
                 try:
+                    dest_filename = None
                     file_path = os.path.join(CuemsMedia.media_path, media.unix_name)
                     dest_filename = CopyMoveVersioned.move(file_path, CuemsMedia.trash_path, media.unix_name)
                     Media_Trash.create(uuid=media.uuid, name=media.name, unix_name=dest_filename, created=media.created, modified=now_formated())
@@ -194,6 +207,8 @@ class CuemsMedia(StringSanitizer):
                 except Exception as e:
                     logger.error("error: {} {}; triying to move file to trash, rolling back database".format(type(e), e))
                     transaction.rollback()
+                    if dest_filename is None:  # if move or copy where not sucessfull with dont need to clean and can end here forwarding the exception, else continue cleaning and then forward the exception
+                        raise e
                     if os.path.exists(os.path.join(CuemsMedia.trash_path, dest_filename)):
                         shutil.move( os.path.join(CuemsMedia.trash_path, dest_filename), os.path.join(CuemsMedia.media_path, media.unix_name))
                     raise e
@@ -208,6 +223,7 @@ class CuemsMedia(StringSanitizer):
         
             with db.atomic() as transaction:
                 try:
+                    dest_filename = None
                     file_path = os.path.join(CuemsMedia.trash_path, media_trash.unix_name)
                     dest_filename = CopyMoveVersioned.move(file_path, CuemsMedia.media_path, media_trash.unix_name)
                     Media.create(uuid=media_trash.uuid, name=media_trash.name, unix_name=dest_filename, created=media_trash.created, modified=now_formated())
@@ -216,6 +232,8 @@ class CuemsMedia(StringSanitizer):
                 except Exception as e:
                     logger.error("error: {} {}; triying to move file to trash, rolling back database".format(type(e), e))
                     transaction.rollback()
+                    if dest_filename is None:  # if move or copy where not sucessfull with dont need to clean and can end here forwarding the exception, else continue cleaning and then forward the exception
+                        raise e
                     if os.path.exists(os.path.join(CuemsMedia.media_path, dest_filename)):
                         shutil.move( os.path.join(CuemsMedia.media_path, dest_filename), os.path.join(CuemsMedia.trash_path, media_trash.unix_name))
                     raise e
@@ -286,10 +304,8 @@ class CuemsProject(StringSanitizer):
                     project.name=data['CuemsScript']['name']
                     project.modified=now_formated()
                     project.save()
-                    ProjectMedia.delete().where(ProjectMedia.project == project).execute() #TODO: this could be optimized, now it deletes al file references, re-scans the script and ads referenced files to accout for changes. Would be posible to comprare, delete missing ones and and new ones.
-
-                    project_object = CuemsProject.parse_and_add_media_relations(project, data)
-                    
+                    project_object = CuemsParser(data).parse()
+                    CuemsProject.update_media_relations(project, project_object, data)
                     CuemsProject.save_xml(project.unix_name, project_object)
                 except Exception as e:
                     logger.error("error: {} {} triying to update  project, rolling back database update".format(type(e), e))
@@ -301,15 +317,19 @@ class CuemsProject(StringSanitizer):
 
     @staticmethod
     def new(data):
-        unix_name = StringSanitizer.sanitize(data['CuemsScript']['name'])
+        try:
+            unix_name = StringSanitizer.sanitize_dir_permit_increment(data['CuemsScript']['unix_name'])
+        except KeyError:
+            unix_name = StringSanitizer.sanitize_dir_name(data['CuemsScript']['name'])
+        
         project_uuid = str(uuid_module.uuid1())
         data['CuemsScript']['uuid']= project_uuid
         with db.atomic() as transaction:
             try:
                 project = Project.create(uuid=project_uuid, unix_name=unix_name, name=data['CuemsScript']['name'], created=now_formated(), modified=now_formated())
                 os.mkdir(os.path.join(CuemsProject.projects_path, unix_name))
-                project_object = CuemsProject.parse_and_add_media_relations(project, data)
-
+                project_object = CuemsParser(data).parse()
+                CuemsProject.add_media_relations(project, project_object, data)
                 CuemsProject.save_xml(unix_name, project_object)
                 return project_uuid
             except Exception as e:
@@ -325,6 +345,7 @@ class CuemsProject(StringSanitizer):
             project = Project.get(Project.uuid==uuid)
             with db.atomic() as transaction:
                 try:
+                    new_unix_name = None
                     project_path = os.path.join(CuemsProject.projects_path, project.unix_name)
                     new_unix_name = CopyMoveVersioned.copy_dir(project_path, CuemsProject.projects_path, project.unix_name)
                     project.unix_name = new_unix_name
@@ -336,11 +357,14 @@ class CuemsProject(StringSanitizer):
 
                     dup_project= Project.get(Project.uuid==new_uuid)
                     data = CuemsProject.load_xml(dup_project.unix_name)
-                    project_object = CuemsProject.parse_and_add_media_relations(dup_project, data)
+                    project_object = CuemsParser(data).parse()
+                    CuemsProject.add_media_relations(dup_project, project_object, data)
                     return new_uuid
                 except Exception as e:
                     logger.error("error: {} {}; triying to duplicate  project, rolling back database update".format(type(e), e))
                     transaction.rollback()
+                    if new_unix_name is None:  # if move or copy where not sucessfull with dont need to clean and can end here forwarding the exception, else continue cleaning and then forward the exception
+                        raise e
                     if os.path.exists(os.path.join(CuemsProject.projects_path, new_unix_name)):
                         shutil.rmtree(os.path.join(CuemsProject.projects_path, new_unix_name))
                     raise e
@@ -354,6 +378,7 @@ class CuemsProject(StringSanitizer):
             project = Project.get(Project.uuid==uuid)
             with db.atomic() as transaction:
                 try:
+                    dest_filename = None
                     file_path = os.path.join(CuemsProject.projects_path, project.unix_name)
                     dest_filename = CopyMoveVersioned.move(file_path, CuemsProject.trash_path, project.unix_name)
                     Project_Trash.create(uuid=project.uuid, name=project.name, unix_name=dest_filename, created=project.created, modified=now_formated())
@@ -362,6 +387,8 @@ class CuemsProject(StringSanitizer):
                 except Exception as e:
                     logger.error("error: {} {}; triying to move file to trash, rolling back database".format(type(e), e))
                     transaction.rollback()
+                    if dest_filename is None:  # if move or copy where not sucessfull with dont need to clean and can end here forwarding the exception, else continue cleaning and then forward the exception
+                        raise e
                     if os.path.exists(os.path.join(CuemsProject.trash_path, dest_filename)):
                         shutil.move( os.path.join(CuemsProject.trash_path, dest_filename), os.path.join(CuemsProject.projects_path, project.unix_name))
                     raise e
@@ -376,6 +403,7 @@ class CuemsProject(StringSanitizer):
         
             with db.atomic() as transaction:
                 try:
+                    dest_filename = None
                     project_path = os.path.join(CuemsProject.trash_path, project_trash.unix_name)
                     dest_filename = CopyMoveVersioned.move(project_path, CuemsProject.projects_path, project_trash.unix_name)
                     Project.create(uuid=project_trash.uuid, name=project_trash.name, unix_name=dest_filename, created=project_trash.created, modified=now_formated())
@@ -387,6 +415,8 @@ class CuemsProject(StringSanitizer):
                 except Exception as e:
                     logger.error("error: {} {}; triying to move file to trash, rolling back database".format(type(e), e))
                     transaction.rollback()
+                    if dest_filename is None:  # if move or copy where not sucessfull with dont need to clean and can end here forwarding the exception, else continue cleaning and then forward the exception
+                        raise e
                     if os.path.exists(os.path.join(CuemsProject.projects_path, dest_filename)):
                         shutil.move( os.path.join(CuemsProject.projects_path, dest_filename), os.path.join(CuemsProject.trash_path, project_path.unix_name))
                     raise e
@@ -412,14 +442,41 @@ class CuemsProject(StringSanitizer):
             raise NonExistentItemError("item with uuid: {} does not exit".format(uuid))
 
     @staticmethod
-    def parse_and_add_media_relations(project, data):
-        project_object = CuemsParser(data).parse()
-        media_list = project_object.get_media()
-        for media_name, value in media_list.items():
+    def add_media_relations(project, project_object, data):
+        media_dict = project_object.get_media()
+        print(media_dict)
+        for media_name, value in media_dict.items():
             media = Media.get(Media.unix_name==media_name)
             ProjectMedia.create( project=project, media=media)    
+    
+    @staticmethod
+    def update_media_relations(project, project_object, data):
+        old_media_query = project.medias()
+        old_media_dict = dict()
+        for media in old_media_query:
+            old_media_dict[media.unix_name] = str(media.uuid)
+        old_media_list=list(old_media_dict.keys())
 
-        return project_object
+        
+        
+        media_dict = project_object.get_media()
+        media_list =list(media_dict.keys())
+        
+        remove_set = set(old_media_list).difference(media_list)
+        add_set = set(media_list).difference(old_media_list)
+
+        logging.debug('media remove list: {}'.format(remove_set))
+        logging.debug('media add list: {}'.format(add_set))
+
+        if remove_set:
+            for media_unix_name in remove_set:
+                ProjectMedia.delete().where((ProjectMedia.project == project)&(ProjectMedia.media == old_media_dict[media_unix_name] )).execute() 
+
+        if add_set:
+            for media_unix_name in add_set:
+                media = Media.select(Media.uuid).where(Media.unix_name==media_unix_name).get()
+                ProjectMedia.create( project=project, media=media)
+
     
     @staticmethod
     def save_xml(unix_name, project_object):
@@ -436,3 +493,4 @@ class CuemsProject(StringSanitizer):
 
 CuemsLibraryMaintenance.check_dir_hierarchy()
 db.create_tables([Project, Project_Trash, Media, Media_Trash, ProjectMedia])
+
