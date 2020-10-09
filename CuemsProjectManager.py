@@ -17,7 +17,7 @@ from .. import XmlReader, XmlWriter
 
 pewee_logger = logging.getLogger('peewee')
 
-pewee_logger.setLevel(logging.DEBUG)
+pewee_logger.setLevel(logging.INFO)
 pewee_logger.addHandler(handler)
 
 
@@ -279,8 +279,6 @@ class CuemsProject(StringSanitizer):
     def load(uuid):
         try:
             project = Project.get((Project.uuid==uuid) & (Project.in_trash == False))
-            print(project)
-            print(project.in_trash)
             return CuemsProject.load_xml(project.unix_name)
         except DoesNotExist:
             raise NonExistentItemError("item with uuid: {} does not exit".format(uuid))
@@ -456,7 +454,6 @@ class CuemsProject(StringSanitizer):
     @staticmethod
     def add_media_relations(project, project_object, data):
         media_dict = project_object.get_media()
-        print(media_dict)
         for media_name, value in media_dict.items():
             media = Media.get(Media.unix_name==media_name)
             ProjectMedia.create( project=project, media=media)    
