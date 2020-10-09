@@ -369,6 +369,8 @@
 </head>
 
 <body>
+    <div class="session_id">
+    </div>
     <div class="buttons">
         <div class="minus button">-</div>
         <div class="" id="count">?</div>
@@ -406,6 +408,7 @@
     </script>
 
     <script>
+        var session_id = document.querySelector('.session_id');
         var minus = document.querySelector('.minus');
         var plus = document.querySelector('.plus');
         var value = document.querySelector('#count');
@@ -421,7 +424,7 @@
         var project_id = document.querySelector('#project_id');
 
         //websocket = new WebSocket("wss://dev.stagelab.net/ws");
-        websocket = new WebSocket("ws://localhost:9092");
+        websocket = new WebSocket("ws://localhost:9092/?session=0f430284-0a26-11eb-91fc-1c6f65465cae");
         minus.onclick = function (event) {
             websocket.send(JSON.stringify({ action: 'minus' }));
         }
@@ -452,6 +455,9 @@
         websocket.onmessage = function (event) {
             data = JSON.parse(event.data);
             switch (data.type) {
+                case 'session_id':
+                    session_id.textContent = data.value;
+                    break;
                 case 'counter':
                     value.textContent = data.value;
                     break;

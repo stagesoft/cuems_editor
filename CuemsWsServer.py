@@ -10,6 +10,8 @@ from multiprocessing import Process, Event
 import signal
 from random import randint
 from hashlib import md5
+import uuid as uuid_module
+import re
 
 import time
 
@@ -50,6 +52,7 @@ class CuemsWsServer():
     def __init__(self):
         self.state = {"value": 0} #TODO: provisional
         self.users = dict()
+        self.sessions = dict()
         try:
             if not os.path.exists(self.tmp_upload_forlder_path):
                 os.mkdir(self.tmp_upload_forlder_path)
@@ -102,16 +105,16 @@ class CuemsWsServer():
         
         logger.info("new connection: {}, path: {}".format(websocket, path))
 
-        if path == '/':                                    # project manager
-            await self.project_manager_session(websocket)
+        if (path == '/' or path[0:9] == '/?session'):                                    # project manager
+            await self.project_manager_session(websocket, path)
         elif path == '/upload':                            # file upload
             await self.upload_session(websocket)
         else:
             logger.info("unknow path: {}".format(path))
 
-    async def project_manager_session(self, websocket):
+    async def project_manager_session(self, websocket, path):
         user_session = CuemsWsUser(self, websocket)
-        await self.register(user_session)
+        await self.register(user_session, path)
         await user_session.outgoing.put(self.counter_event())
         try:
             consumer_task = asyncio.create_task(user_session.consumer_handler())
@@ -134,10 +137,33 @@ class CuemsWsServer():
         await user_upload_session.message_handler()
         logger.info("upload session ended: {}".format(user_upload_session))
 
-    async def register(self, user_task):
-        logger.info("user registered: {}".format(id(user_task.websocket)))
-        self.users[user_task] = None
+    async def register(self, user_session, path):
+        logger.info("user registered: {}".format(id(user_session.websocket)))
+        self.users[user_session] = None
         await self.notify_users("users")
+        await self.check_session(user_session, path)
+
+    async def check_session(self, user_session, path):
+        session_uuid_patern = r"/\?session=(?P<uuid>[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[1][0-9A-Fa-f]{3}-[89AB][0-9A-Fa-f]{3}-[0-9A-Fa-f]{12})?"
+        matches = re.search(session_uuid_patern, path)
+        if (matches.groupdict()['uuid'] == None):
+            uuid = str(uuid_module.uuid1())
+            self.sessions[uuid]= user_session
+        else:
+            uuid = matches.groupdict()['uuid']
+            if uuid in self.sessions:
+                self.sessions[uuid]= user_session
+            else:
+                uuid = str(uuid_module.uuid1())
+                self.sessions[uuid]= user_session
+
+        
+        
+        await self.notify_session(user_session, uuid) 
+    
+    async def notify_session(self, user_session, uuid):
+        message = json.dumps({"type": "session_id", "value": uuid})
+        await user_session.outgoing.put(message)
 
     async def unregister(self, user_task):
         logger.info("user unregistered: {}".format(id(user_task.websocket)))
