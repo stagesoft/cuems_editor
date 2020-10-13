@@ -371,6 +371,8 @@
 <body>
     <div class="session_id">
     </div>
+    <div class="play_status">
+    </div>
     <div class="buttons">
         <div class="minus button">-</div>
         <div class="" id="count">?</div>
@@ -432,6 +434,7 @@
         }
 
         var session_id = document.querySelector('.session_id');
+        var play_status = document.querySelector('.play_status');
         var minus = document.querySelector('.minus');
         var plus = document.querySelector('.plus');
         var value = document.querySelector('#count');
@@ -481,6 +484,9 @@
                 case 'session_id':
                     session_id.textContent = data.value;
                     setCookie('session_id', data.value, 30)
+                    break;
+                case 'play_status':
+                    play_status.textContent = data.value;
                     break;
                 case 'counter':
                     value.textContent = data.value;

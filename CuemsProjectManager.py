@@ -1,5 +1,4 @@
 from peewee import *
-from datetime import datetime
 import time
 import uuid as uuid_module
 import os
@@ -7,12 +6,11 @@ import shutil
 import json
 
 from ..log import *
-from .CuemsUtils import StringSanitizer, CopyMoveVersioned, CuemsLibraryMaintenance, LIBRARY_PATH
+from .CuemsUtils import StringSanitizer, CopyMoveVersioned, CuemsLibraryMaintenance, LIBRARY_PATH, now_formated
 from .CuemsErrors import *
-from .. import DictParser
-from .. import CuemsParser
+from ..DictParser import *
 from ..XmlBuilder import XmlBuilder
-from .. import XmlReader, XmlWriter
+from ..XmlReaderWriter import XmlReader, XmlWriter
 
 
 pewee_logger = logging.getLogger('peewee')
@@ -24,8 +22,6 @@ pewee_logger.addHandler(handler)
 db = SqliteDatabase(os.path.join(LIBRARY_PATH, 'project-manager.db'), pragmas={'foreign_keys': 1}) # TODO: get filename from settings ?
 
 
-def now_formated():
-    return datetime.now().strftime("%m/%d/%Y, %H:%M:%S")
 
 class BaseModel(Model):
     class Meta:

@@ -1,6 +1,7 @@
 import os
 import shutil
 import getpass
+from datetime import datetime
 from ..log import logger
 
 username = getpass.getuser()
@@ -12,6 +13,9 @@ LIBRARY_PATH = os.path.join('/home', username, 'cuems_library')
 
 
 logger.debug('library path set to : {}'.format(LIBRARY_PATH))
+
+def now_formated():
+    return datetime.now().strftime("%m/%d/%Y, %H:%M:%S")
 
 class StringSanitizer():
     
