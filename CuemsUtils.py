@@ -11,7 +11,7 @@ if username == 'root': # TODO: this is temporal
 LIBRARY_PATH = os.path.join('/home', username, 'cuems_library')
 
 
-logger.debug('library path set to : {}'.format(LIBRARY_PATH))
+# logger.debug('library path set to : {}'.format(LIBRARY_PATH))
 
 class StringSanitizer():
     

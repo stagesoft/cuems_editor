@@ -22,7 +22,7 @@ from .CuemsUtils import StringSanitizer, CuemsLibraryMaintenance, LIBRARY_PATH
 
 
 
-
+'''
 formatter = logging.Formatter('Cuems:ws-server: %(levelname)s (PID: %(process)d)-%(threadName)-9s)-(%(funcName)s) %(message)s')
 
 
@@ -38,6 +38,7 @@ logger_asyncio.addHandler(handler)
 logger_ws = logging.getLogger('websockets')
 logger_ws.setLevel(logging.INFO)  # websockets debug level,  in debug prints all frames, also binary frames! 
 logger_ws.addHandler(handler)
+'''
 
 class CuemsWsServer():
     
