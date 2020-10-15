@@ -9,8 +9,7 @@ import json
 from ..log import *
 from .CuemsUtils import StringSanitizer, CopyMoveVersioned, CuemsLibraryMaintenance, LIBRARY_PATH
 from .CuemsErrors import *
-from .. import DictParser
-from .. import CuemsParser
+from ..DictParser import CuemsParser
 from ..XmlBuilder import XmlBuilder
 from .. import XmlReader, XmlWriter
 
