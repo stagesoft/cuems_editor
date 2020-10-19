@@ -1,7 +1,7 @@
 import os
 import shutil
 import getpass
-from datetime import datetime
+import datetime
 from ..log import logger
 
 username = getpass.getuser()
@@ -14,8 +14,8 @@ LIBRARY_PATH = os.path.join('/home', username, 'cuems_library')
 
 logger.debug('library path set to : {}'.format(LIBRARY_PATH))
 
-def now_formated():
-    return datetime.now().strftime("%m/%d/%Y, %H:%M:%S")
+def date_now_iso_utc():
+    return datetime.datetime.utcnow().isoformat()
 
 class StringSanitizer():
     

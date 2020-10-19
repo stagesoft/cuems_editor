@@ -4,9 +4,10 @@ import uuid as uuid_module
 import os
 import shutil
 import json
+import datetime
 
 from ..log import *
-from .CuemsUtils import StringSanitizer, CopyMoveVersioned, CuemsLibraryMaintenance, LIBRARY_PATH, now_formated
+from .CuemsUtils import StringSanitizer, CopyMoveVersioned, CuemsLibraryMaintenance, LIBRARY_PATH, date_now_iso_utc
 from .CuemsErrors import *
 from ..DictParser import *
 from ..XmlBuilder import XmlBuilder
@@ -31,8 +32,8 @@ class Project(BaseModel):
     uuid = UUIDField(index = True, unique = True, primary_key = True)
     name = CharField( null = True )
     unix_name = CharField(unique = True)
-    created = DateTimeField()
-    modified = DateTimeField()
+    created = DateTimeField(default=date_now_iso_utc())
+    modified = DateTimeField(default=date_now_iso_utc())
     in_trash = BooleanField(default=False)
 
     @staticmethod
@@ -55,8 +56,8 @@ class Media(BaseModel):
     uuid = UUIDField(index = True, unique = True, primary_key = True)
     name = CharField( null = True )
     unix_name = CharField(unique = True)
-    created = DateTimeField()
-    modified = DateTimeField()
+    created = DateTimeField(default=date_now_iso_utc())
+    modified = DateTimeField(default=date_now_iso_utc())
     in_trash = BooleanField(default=False)
 
     @staticmethod
@@ -163,7 +164,7 @@ class CuemsMedia(StringSanitizer):
             media = Media.get((Media.uuid==uuid) & (Media.in_trash == False))
             with db.atomic() as transaction:
                 try:
-                    media.update(name=data['uuid']['name'], modified=now_formated()).execute()
+                    media.update(name=data['uuid']['name'], modified=date_now_iso_utc()).execute()
                     return 'updated'
                 except Exception as e:
                     logger.error("error: {} {} triying to update  media data, rolling back database update".format(type(e), e))
@@ -306,7 +307,7 @@ class CuemsProject(StringSanitizer):
             with db.atomic() as transaction:
                 try:
                     project.name=data['CuemsScript']['name']
-                    now = now_formated()
+                    now = date_now_iso_utc()
                     data['CuemsScript']['modified'] = now
                     project.modified=now
                     project.save()
@@ -330,7 +331,7 @@ class CuemsProject(StringSanitizer):
         
         project_uuid = str(uuid_module.uuid1())
         data['CuemsScript']['uuid']= project_uuid
-        now = now_formated()
+        now = date_now_iso_utc()
         data['CuemsScript']['created'] = now
         data['CuemsScript']['modified'] = now
         with db.atomic() as transaction:
@@ -361,7 +362,7 @@ class CuemsProject(StringSanitizer):
                     new_uuid = str(uuid_module.uuid1())
                     project.uuid = new_uuid
                     project.name = project.name + ' - Copy'
-                    project.modified=now_formated()
+                    project.modified=date_now_iso_utc()
                     project.save(force_insert=True)
 
                     dup_project= Project.get(Project.uuid==new_uuid)
@@ -486,13 +487,13 @@ class CuemsProject(StringSanitizer):
     @staticmethod
     def save_xml(unix_name, project_object):
 
-        writer = XmlWriter(schema = '/home/ion/src/cuems/python/osc-control/src/cuems/cues.xsd', xmlfile = (os.path.join(CuemsProject.projects_path, unix_name, 'script.xml')))
+        writer = XmlWriter(schema = '/home/ion/src/cuems/python/cuems-engine/src/cuems/cues.xsd', xmlfile = (os.path.join(CuemsProject.projects_path, unix_name, 'script.xml')))
         writer.write_from_object(project_object)
 
 
     @staticmethod
     def load_xml(unix_name):
-        reader = XmlReader(schema = '/home/ion/src/cuems/python/osc-control/src/cuems/cues.xsd', xmlfile = (os.path.join(CuemsProject.projects_path, unix_name, 'script.xml')))
+        reader = XmlReader(schema = '/home/ion/src/cuems/python/cuems-engine/src/cuems/cues.xsd', xmlfile = (os.path.join(CuemsProject.projects_path, unix_name, 'script.xml')))
         return reader.read()
         
 
