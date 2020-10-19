@@ -11,13 +11,13 @@
 
     <!-- Uploader JS and CSS -->
     <script>
-        
+
         function FileSliceSend(param) {
             var md5 = CryptoJS.algo.MD5.create();
             var reader = new FileReader();
             var ws = new WebSocket(param.url);
             var file = param.file;
-            var filedata = { action: 'upload', value: { name: file.name, size: file.size }};
+            var filedata = { action: 'upload', value: { name: file.name, size: file.size } };
 
             var chunksize = param.chunksize;
             var slice_start = 0;
@@ -29,7 +29,7 @@
 
             ws.onopen = function () { ws.send(JSON.stringify(filedata)) };
 
-            reader.onload = function(event) {
+            reader.onload = function (event) {
                 ws.send(event.target.result);
                 md5.update(CryptoJS.lib.WordArray.create(event.target.result));
             }
@@ -70,7 +70,7 @@
                     console.log(hash)
                     var hashHex = hash.toString(CryptoJS.enc.Hex);
                     console.log(hashHex)
-                    ws.send(JSON.stringify({ action: 'finished' , value: hashHex}));
+                    ws.send(JSON.stringify({ action: 'finished', value: hashHex }));
                     return;
                 }
 
@@ -82,7 +82,7 @@
                 }
                 chunk = file.slice(slice_start, slice_end);
                 reader.readAsArrayBuffer(chunk);
-                
+
                 if (param.onchunk) {
                     param.onchunk(slice_end / end);  // send ratio completed
                 }
@@ -148,7 +148,7 @@
                 submit.setAttribute("class", submit.className + " disabled");
                 var file = fileInput.files.item(0);
                 var fileSize = file.size;
-                
+
                 var progressOuterDiv = document.createElement("div");
                 var progressBar = new ProgressBar(progressOuterDiv, fileSize);
                 mainDiv.appendChild(progressOuterDiv);
@@ -162,7 +162,7 @@
                     progressBar.text.innerHTML = "Error: " + status.error;
                 }
                 FileSliceSend(params);
-              
+
             }
         }
 
@@ -369,6 +369,10 @@
 </head>
 
 <body>
+    <div class="session_id">
+    </div>
+    <div class="play_status">
+    </div>
     <div class="buttons">
         <div class="minus button">-</div>
         <div class="" id="count">?</div>
@@ -378,7 +382,7 @@
     <div class="load list button" id='list_files'>Load file list</div>
     <div class="load list button" id='list_trash'>Load project trash list</div>
     <div class="load list button" id='list_files_trash'>Load file trash list</div>
-    
+
     <div class="buttons2">
         <div class="load button" id='load'>Load</div>
 
@@ -406,6 +410,31 @@
     </script>
 
     <script>
+        function setCookie(cname, cvalue, exdays) {
+            var d = new Date();
+            d.setTime(d.getTime() + (exdays * 24 * 60 * 60 * 1000));
+            var expires = "expires=" + d.toUTCString();
+            document.cookie = cname + "=" + cvalue + ";" + expires + ";path=/";
+        }
+
+        function getCookie(cname) {
+            var name = cname + "=";
+            var decodedCookie = decodeURIComponent(document.cookie);
+            var ca = decodedCookie.split(';');
+            for (var i = 0; i < ca.length; i++) {
+                var c = ca[i];
+                while (c.charAt(0) == ' ') {
+                    c = c.substring(1);
+                }
+                if (c.indexOf(name) == 0) {
+                    return c.substring(name.length, c.length);
+                }
+            }
+            return "";
+        }
+
+        var session_id = document.querySelector('.session_id');
+        var play_status = document.querySelector('.play_status');
         var minus = document.querySelector('.minus');
         var plus = document.querySelector('.plus');
         var value = document.querySelector('#count');
@@ -421,7 +450,7 @@
         var project_id = document.querySelector('#project_id');
 
         //websocket = new WebSocket("wss://dev.stagelab.net/ws");
-        websocket = new WebSocket("ws://localhost:9092");
+        websocket = new WebSocket("ws://localhost:9092/?session=" + getCookie('session_id'));
         minus.onclick = function (event) {
             websocket.send(JSON.stringify({ action: 'minus' }));
         }
@@ -452,6 +481,13 @@
         websocket.onmessage = function (event) {
             data = JSON.parse(event.data);
             switch (data.type) {
+                case 'session_id':
+                    session_id.textContent = data.value;
+                    setCookie('session_id', data.value, 30)
+                    break;
+                case 'play_status':
+                    play_status.textContent = data.value;
+                    break;
                 case 'counter':
                     value.textContent = data.value;
                     break;

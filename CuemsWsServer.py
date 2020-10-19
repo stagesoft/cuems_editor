@@ -6,10 +6,13 @@ import os
 import shutil
 import aiofiles
 import websockets as ws
-from multiprocessing import Process, Event
+from multiprocessing import Process
+from queue import Empty
 import signal
 from random import randint
 from hashlib import md5
+import uuid as uuid_module
+import re
 
 import time
 
@@ -47,9 +50,11 @@ class CuemsWsServer():
     
     media_path = os.path.join(LIBRARY_PATH, 'media')     #TODO: get upload folder path from settings?
     
-    def __init__(self):
+    def __init__(self, _queue):
+        self.queue = _queue
         self.state = {"value": 0} #TODO: provisional
         self.users = dict()
+        self.sessions = dict()
         try:
             if not os.path.exists(self.tmp_upload_forlder_path):
                 os.mkdir(self.tmp_upload_forlder_path)
@@ -60,8 +65,7 @@ class CuemsWsServer():
 
 
     def start(self, port):
-        self.event = Event()
-        self.process = Process(target=self.run_async_server, args=(self.event,))
+        self.process = Process(target=self.run_async_server, args=(self.queue,))
         self.port = port
         self.host = 'localhost'
         self.process.start()
@@ -71,13 +75,14 @@ class CuemsWsServer():
     def run_async_server(self, event):
         self.event_loop = asyncio.new_event_loop()
         asyncio.set_event_loop(self.event_loop)
-        self.executor =  concurrent.futures.ThreadPoolExecutor(thread_name_prefix='ws_load_ThreadPoolExecutor', max_workers=5) # TODO: adjust max workers
+        self.executor =  concurrent.futures.ThreadPoolExecutor(thread_name_prefix='ws_ProjectManager_ThreadPoolExecutor', max_workers=5) # TODO: adjust max workers
         #self.event_loop.set_exception_handler(self.exception_handler) ### TODO:UNCOMENT FOR PRODUCTION 
         self.project_server = ws.serve(self.connection_handler, self.host, self.port, max_size=None) #TODO: choose max packets size from ui and limit it here
         for sig in (signal.SIGINT, signal.SIGTERM):
             self.event_loop.add_signal_handler(sig, self.ask_exit)
         logger.info('server listening on {}, port {}'.format(self.host, self.port))
         self.event_loop.run_until_complete(self.project_server)
+    #    self.event_loop.create_task(self.queue_handler())
         self.event_loop.run_forever()
         self.event_loop.close()
         
@@ -97,30 +102,40 @@ class CuemsWsServer():
         logger.info('ws server closed')
         self.event_loop.call_soon(self.event_loop.stop)
         logger.info('event loop stoped')
+    
+    @asyncio.coroutine
+    def async_get(self):
+
+        """ Calls q.get() in a separate Thread. 
+        q.get is an I/O call, so it should release the GIL.
+        """
+        return (yield from self.event_loop.run_in_executor(concurrent.futures.ThreadPoolExecutor(thread_name_prefix='ws_QueueGet_ThreadPoolExecutor', max_workers=2), 
+                                           self.queue.get))
+            
 
     async def connection_handler(self, websocket, path):
         
         logger.info("new connection: {}, path: {}".format(websocket, path))
 
-        if path == '/':                                    # project manager
-            await self.project_manager_session(websocket)
+        if (path == '/' or path[0:9] == '/?session'):                                    # project manager
+            await self.project_manager_session(websocket, path)
         elif path == '/upload':                            # file upload
             await self.upload_session(websocket)
         else:
             logger.info("unknow path: {}".format(path))
 
-    async def project_manager_session(self, websocket):
+    async def project_manager_session(self, websocket, path):
         user_session = CuemsWsUser(self, websocket)
-        await self.register(user_session)
+        await self.register(user_session, path)
         await user_session.outgoing.put(self.counter_event())
         try:
             consumer_task = asyncio.create_task(user_session.consumer_handler())
             producer_task = asyncio.create_task(user_session.producer_handler())
             # start 3 message processing task so a load or any other time consuming action still leaves with 2 tasks running  and interface feels responsive. TODO:discuss this
             processor_tasks = [asyncio.create_task(user_session.consumer()) for _ in range(3)]
+            queue_task = asyncio.create_task(user_session.queue_handler())
             
-            done_tasks, pending_tasks = await asyncio.wait([consumer_task, producer_task, *processor_tasks], return_when=asyncio.FIRST_COMPLETED)
-
+            done_tasks, pending_tasks = await asyncio.wait([consumer_task, producer_task, *processor_tasks, queue_task], return_when=asyncio.FIRST_COMPLETED)
             for task in pending_tasks:
                 task.cancel()
 
@@ -134,10 +149,44 @@ class CuemsWsServer():
         await user_upload_session.message_handler()
         logger.info("upload session ended: {}".format(user_upload_session))
 
-    async def register(self, user_task):
-        logger.info("user registered: {}".format(id(user_task.websocket)))
-        self.users[user_task] = None
+    async def register(self, user_session, path):
+        logger.info("user registered: {}".format(id(user_session.websocket)))
+        self.users[user_session] = None
         await self.notify_users("users")
+        user_session.session_id =  await self.check_session(user_session, path)
+        await self.load_session(user_session)
+
+    async def check_session(self, user_session, path):
+        session_uuid_patern = r"/\?session=(?P<uuid>[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[1][0-9A-Fa-f]{3}-[89AB][0-9A-Fa-f]{3}-[0-9A-Fa-f]{12})?"
+        matches = re.search(session_uuid_patern, path)
+        if (matches.groupdict()['uuid'] != None):
+            uuid = matches.groupdict()['uuid']
+            if uuid  not in self.sessions:
+                logger.debug(f"uuid not found {uuid}, creating new session")
+                uuid = str(uuid_module.uuid1())
+            else:
+                logger.debug(f"session_id found, reusing {uuid}")
+        else:
+            uuid = str(uuid_module.uuid1())
+        
+        try:
+            self.sessions[uuid]['ws']=id(user_session.websocket)
+        except KeyError:
+            self.sessions[uuid]= {'ws': id(user_session.websocket)}
+
+        await self.notify_session(user_session, uuid)
+
+        return uuid
+
+    async def load_session(self, user_session):
+        try:
+            await user_session.send_project(self.sessions[user_session.session_id]['loaded_project'], 'project_load')
+        except KeyError:
+            pass
+    
+    async def notify_session(self, user_session, uuid):
+        message = json.dumps({"type": "session_id", "value": uuid})
+        await user_session.outgoing.put(message)
 
     async def unregister(self, user_task):
         logger.info("user unregistered: {}".format(id(user_task.websocket)))
@@ -205,7 +254,15 @@ class CuemsWsUser():
         self.incoming = asyncio.Queue()
         self.outgoing = asyncio.Queue()
         self.websocket = websocket
+        self.session_id = None
         server.users[self] = None
+
+    async def queue_handler(self):
+        while True:
+            item = await self.server.async_get()
+            print(f'{id(self.websocket)} gets {item}')
+            message = json.dumps({"type": "play_status", "value": item})
+            await self.outgoing.put(message)
 
     async def consumer_handler(self):
         try:
@@ -216,7 +273,7 @@ class CuemsWsUser():
 
     async def producer_handler(self):
         while True:
-            message = await self.producer()
+            message = await self.outgoing.get()
             try:
                 await self.websocket.send(message)
             except (ws.exceptions.ConnectionClosed, ws.exceptions.ConnectionClosedOK, ws.exceptions.ConnectionClosedError) as e:
@@ -281,11 +338,6 @@ class CuemsWsUser():
                 await self.notify_error_to_user('error processing request')
 
 
-    async def producer(self):
-        while True:
-            message = await self.outgoing.get()
-            return message
-
     async def notify_user(self, msg=None, uuid=None, action=None):
         if (uuid is None) and (action is None) and (msg is not None):
             await self.outgoing.put(json.dumps({"type": "state", "value":msg}))
@@ -319,6 +371,7 @@ class CuemsWsUser():
             msg = json.dumps({"type":"project", "value":project})
             await self.outgoing.put(msg)
             self.server.users[self] = project_uuid
+            self.server.sessions[self.session_id]['loaded_project']=project_uuid
         except NonExistentItemError as e:
             logger.info(e)
             await self.notify_error_to_user(str(e), uuid=project_uuid, action=action )
