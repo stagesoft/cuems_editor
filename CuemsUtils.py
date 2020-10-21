@@ -9,11 +9,6 @@ if username == 'root': # TODO: this is temporal
     username = 'stagelab'
 
 
-LIBRARY_PATH = os.path.join('/home', username, 'cuems_library')
-
-
-logger.debug('library path set to : {}'.format(LIBRARY_PATH))
-
 def date_now_iso_utc():
     return datetime.datetime.utcnow().isoformat()
 
@@ -82,28 +77,5 @@ class CopyMoveVersioned():
         return dest_dirname
 
 class CuemsLibraryMaintenance():
-
-    @staticmethod
-    def check_dir_hierarchy():
-        try:
-            if not os.path.exists(LIBRARY_PATH):
-                os.mkdir(LIBRARY_PATH)
-                logger.info('creating library forlder {}'.format(LIBRARY_PATH))
-
-            if not os.path.exists( os.path.join(LIBRARY_PATH, 'projects') ) :
-                os.mkdir(os.path.join(LIBRARY_PATH, 'projects'))
-
-            if not os.path.exists( os.path.join(LIBRARY_PATH, 'media') ) :
-                os.mkdir(os.path.join(LIBRARY_PATH, 'media'))
-
-            if not os.path.exists( os.path.join(LIBRARY_PATH, 'trash') ) :
-                os.mkdir(os.path.join(LIBRARY_PATH, 'trash'))
-
-            if not os.path.exists( os.path.join(LIBRARY_PATH, 'trash', 'projects') ) :
-                os.mkdir(os.path.join(LIBRARY_PATH, 'trash', 'projects'))
-
-            if not os.path.exists( os.path.join(LIBRARY_PATH, 'trash', 'media') ) :
-                os.mkdir(os.path.join(LIBRARY_PATH, 'trash', 'media'))
-
-        except Exception as e:
-            logger.error("error: {} {}".format(type(e), e))
+    def __init__(self, library_path):
+        self.library_path = library_path

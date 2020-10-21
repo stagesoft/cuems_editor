@@ -6,10 +6,12 @@ import shutil
 import json
 import datetime
 
-from ..log import *
-from .CuemsUtils import StringSanitizer, CopyMoveVersioned, CuemsLibraryMaintenance, LIBRARY_PATH, date_now_iso_utc
+
+from .CuemsDBModel import *
+from .CuemsUtils import StringSanitizer, CopyMoveVersioned, CuemsLibraryMaintenance, date_now_iso_utc
 from .CuemsErrors import *
-from ..DictParser import CuemsParser
+from ..log import *
+from ..DictParser import *
 from ..XmlBuilder import XmlBuilder
 from ..XmlReaderWriter import XmlReader, XmlWriter
 
@@ -20,110 +22,44 @@ pewee_logger.setLevel(logging.INFO)
 pewee_logger.addHandler(handler)
 
 
-db = SqliteDatabase(os.path.join(LIBRARY_PATH, 'project-manager.db'), pragmas={'foreign_keys': 1}) # TODO: get filename from settings ?
 
 
-
-class BaseModel(Model):
-    class Meta:
-        database = db
-
-class Project(BaseModel):
-    uuid = UUIDField(index = True, unique = True, primary_key = True)
-    name = CharField( null = True )
-    unix_name = CharField(unique = True)
-    created = DateTimeField(default=date_now_iso_utc())
-    modified = DateTimeField(default=date_now_iso_utc())
-    in_trash = BooleanField(default=False)
-
-    @staticmethod
-    def all_fields():
-        return [Project.uuid, Project.name, Project.unix_name, Project.created, Project.modified, Project.in_trash]
-
-
-    def medias(self):
-        return (Media
-                .select( *Media.all_fields(), fn.COUNT(ProjectMedia.id).alias('count'))
-                .join(ProjectMedia, on=ProjectMedia.media)
-                .where(ProjectMedia.project == self)
-                .order_by(Media.created)
-                .group_by(Media.uuid))
-
-
-
-
-class Media(BaseModel):
-    uuid = UUIDField(index = True, unique = True, primary_key = True)
-    name = CharField( null = True )
-    unix_name = CharField(unique = True)
-    created = DateTimeField(default=date_now_iso_utc())
-    modified = DateTimeField(default=date_now_iso_utc())
-    in_trash = BooleanField(default=False)
-
-    @staticmethod
-    def all_fields():
-        return [Media.uuid, Media.name, Media.unix_name, Media.created, Media.modified, Media.in_trash]
-
-    def projects(self):
-        return (Project
-                .select( *Project.all_fields(), fn.COUNT(ProjectMedia.id).alias('count'))
-                .join(ProjectMedia, on=ProjectMedia.project)
-                .where(ProjectMedia.media == self)
-                .order_by(Project.created)
-                .group_by(Project.uuid))
-
-    def orphan(self):
-        return (Media
-                .select()
-                .join(ProjectMedia, JOIN.LEFT_OUTER)
-                .where(ProjectMedia.media == None)
-                .order_by(Media.created))
-
-
-
-class ProjectMedia(BaseModel):
-    id = PrimaryKeyField()
-    project = ForeignKeyField(Project, backref='project_medias')
-    media = ForeignKeyField(Media, backref='media_projects')
-
-    def missing_refs(self):
-        return (ProjectMedia
-                .select()
-                .join(Media, JOIN.LEFT_OUTER, on=(Media.uuid==ProjectMedia.media))
-                .join(Project, JOIN.LEFT_OUTER, on=(Project.uuid==ProjectMedia.project))
-                .where(
-                    (Media.uuid == None) |
-                    (Project.uuid == None))
-                .order_by(Media.created))
-
-
-
-
-class CuemsMedia(StringSanitizer):
+class CuemsDBManager():
     
-    media_path = os.path.join(LIBRARY_PATH, 'media')     #TODO: get upload folder path from settings?
-    trash_path = os.path.join(LIBRARY_PATH, 'trash', 'media')
+    def __init__(self,settings_dict):
+        self.library_path = settings_dict['library_path']
+        self.db_name = settings_dict['database_name']
+        self.db_path = os.path.join(self.library_path, self.db_name)
+        database.init(self.db_path)
+        database.connect()
+        database.create_tables([Project, Media,  ProjectMedia])
+        self.project = CuemsDBProject(self.library_path, database)
+        self.media = CuemsDBMedia(self.library_path, database)
+
+class CuemsDBMedia(StringSanitizer):
+
+    def __init__(self, library_path, db_connection):
+        self.library_path = library_path
+        self.db = db_connection
+        self.media_path = os.path.join(self.library_path, 'media')
+        self.trash_path = os.path.join(self.library_path, 'trash', 'media')
     
-    
-    @staticmethod
-    def new(tmp_file_path, filename):
-        
-        with db.atomic() as transaction:
+    def new(self, tmp_file_path, filename):
+        with self.db.atomic() as transaction:
             try:
                 dest_filename = None
-                dest_filename = CopyMoveVersioned.move(tmp_file_path, CuemsMedia.media_path, filename)
-                Media.create(uuid=uuid_module.uuid1(), unix_name=dest_filename, created=now_formated(), modified=now_formated(), in_trash=False)
+                dest_filename = CopyMoveVersioned.move(tmp_file_path, self.media_path, filename)
+                Media.create(uuid=uuid_module.uuid1(), name=dest_filename, unix_name=dest_filename, created=date_now_iso_utc(), modified=date_now_iso_utc(), in_trash=False)
             except Exception as e:
                 logger.error("error: {} {} triying to move new file, rolling back database insert".format(type(e), e))
                 transaction.rollback()
                 if dest_filename is None:  # if move or copy where not sucessfull with dont need to clean and can end here forwarding the exception, else continue cleaning and then forward the exception
                         raise e
-                if os.path.exists(os.path.join(CuemsMedia.media_path, dest_filename)):
-                    os.remove(os.path.join(CuemsMedia.media_path, dest_filename))
+                if os.path.exists(os.path.join(self.media_path, dest_filename)):
+                    os.remove(os.path.join(self.media_path, dest_filename))
                 raise e
 
-    @staticmethod
-    def list():
+    def list(self):
         media_list = list()
 
         medias = (Media
@@ -140,8 +76,7 @@ class CuemsMedia(StringSanitizer):
 
         return media_list
 
-    @staticmethod
-    def list_trash():
+    def list_trash(self):
         media_list = list()
 
         medias = (Media
@@ -158,11 +93,10 @@ class CuemsMedia(StringSanitizer):
 
         return media_list
 
-    @staticmethod
-    def save(uuid, data):   #TODO: check uuid format
+    def save(self, uuid, data):   #TODO: check uuid format
         try:
             media = Media.get((Media.uuid==uuid) & (Media.in_trash == False))
-            with db.atomic() as transaction:
+            with self.db.atomic() as transaction:
                 try:
                     media.update(name=data['uuid']['name'], modified=date_now_iso_utc()).execute()
                     return 'updated'
@@ -174,8 +108,7 @@ class CuemsMedia(StringSanitizer):
         except DoesNotExist:
             raise NonExistentItemError("item with uuid: {} does not exit".format(uuid))
 
-    @staticmethod
-    def load_meta(uuid):
+    def load_meta(self, uuid):
         try:
             media = Media.get(Media.uuid==uuid)
             file_meta = dict()
@@ -195,17 +128,16 @@ class CuemsMedia(StringSanitizer):
             raise NonExistentItemError("item with uuid: {} does not exit".format(uuid))
 
         
-    @staticmethod
-    def delete(uuid):
+    def delete(self, uuid):
         try:
             media = Media.get((Media.uuid==uuid) & (Media.in_trash == False))
         
 
-            with db.atomic() as transaction:
+            with self.db.atomic() as transaction:
                 try:
                     dest_filename = None
-                    file_path = os.path.join(CuemsMedia.media_path, media.unix_name)
-                    dest_filename = CopyMoveVersioned.move(file_path, CuemsMedia.trash_path, media.unix_name)
+                    file_path = os.path.join(self.media_path, media.unix_name)
+                    dest_filename = CopyMoveVersioned.move(file_path, self.trash_path, media.unix_name)
                     media.in_trash = True
                     media.save()
                     logger.debug('deleting instance from table: {}'.format(media))
@@ -214,23 +146,22 @@ class CuemsMedia(StringSanitizer):
                     transaction.rollback()
                     if dest_filename is None:  # if move or copy where not sucessfull with dont need to clean and can end here forwarding the exception, else continue cleaning and then forward the exception
                         raise e
-                    if os.path.exists(os.path.join(CuemsMedia.trash_path, dest_filename)):
-                        shutil.move( os.path.join(CuemsMedia.trash_path, dest_filename), os.path.join(CuemsMedia.media_path, media.unix_name))
+                    if os.path.exists(os.path.join(self.trash_path, dest_filename)):
+                        shutil.move( os.path.join(self.trash_path, dest_filename), os.path.join(self.media_path, media.unix_name))
                     raise e
 
         except DoesNotExist:
             raise NonExistentItemError("item with uuid: {} does not exit".format(uuid))
 
-    @staticmethod
-    def restore(uuid):
+    def restore(self, uuid):
         try:
             media_trash = Media.get((Media.uuid==uuid) & (Media.in_trash == True))
         
-            with db.atomic() as transaction:
+            with self.db.atomic() as transaction:
                 try:
                     dest_filename = None
-                    file_path = os.path.join(CuemsMedia.trash_path, media_trash.unix_name)
-                    dest_filename = CopyMoveVersioned.move(file_path, CuemsMedia.media_path, media_trash.unix_name)
+                    file_path = os.path.join(self.trash_path, media_trash.unix_name)
+                    dest_filename = CopyMoveVersioned.move(file_path, self.media_path, media_trash.unix_name)
                     media_trash.in_trash = False
                     media_trash.save()
                     logger.debug('deleting instance from table: {}'.format(media_trash))
@@ -239,20 +170,19 @@ class CuemsMedia(StringSanitizer):
                     transaction.rollback()
                     if dest_filename is None:  # if move or copy where not sucessfull with dont need to clean and can end here forwarding the exception, else continue cleaning and then forward the exception
                         raise e
-                    if os.path.exists(os.path.join(CuemsMedia.media_path, dest_filename)):
-                        shutil.move( os.path.join(CuemsMedia.media_path, dest_filename), os.path.join(CuemsMedia.trash_path, media_trash.unix_name))
+                    if os.path.exists(os.path.join(self.media_path, dest_filename)):
+                        shutil.move( os.path.join(self.media_path, dest_filename), os.path.join(self.trash_path, media_trash.unix_name))
                     raise e
         except DoesNotExist:
             raise NonExistentItemError("item with uuid: {} does not exit".format(uuid))
 
-    @staticmethod
-    def delete_from_trash(uuid):
+    def delete_from_trash(self, uuid):
         try:
             media = Media.get((Media.uuid==uuid) & (Media.in_trash == True))
 
-            with db.atomic() as transaction:
+            with self.db.atomic() as transaction:
                 try:
-                    file_path = os.path.join(CuemsMedia.trash_path, media.unix_name)
+                    file_path = os.path.join(self.trash_path, media.unix_name)
                     media.delete_instance(recursive=True)
                     os.remove(file_path)
                     logger.debug('deleting media from trash: {}'.format(media))
@@ -265,23 +195,25 @@ class CuemsMedia(StringSanitizer):
             raise NonExistentItemError("item with uuid: {} does not exit".format(uuid))
 
 
-class CuemsProject(StringSanitizer):
+class CuemsDBProject(StringSanitizer):
+
+    def __init__(self, library_path, db_connection):
+        self.library_path = library_path
+        self.db = db_connection
+        self.projects_path = os.path.join(self.library_path, 'projects')
+        self.trash_path = os.path.join(self.library_path, 'trash', 'projects')
     
-    projects_path = os.path.join(LIBRARY_PATH, 'projects')
-    trash_path = os.path.join(LIBRARY_PATH, 'trash', 'projects')
-
-
-
-    @staticmethod
-    def load(uuid):
+    
+    
+    
+    def load(self, uuid):
         try:
             project = Project.get((Project.uuid==uuid) & (Project.in_trash == False))
-            return CuemsProject.load_xml(project.unix_name)
+            return self.load_xml(project.unix_name)
         except DoesNotExist:
             raise NonExistentItemError("item with uuid: {} does not exit".format(uuid))
 
-    @staticmethod
-    def list():
+    def list(self):
         project_list = list()
         projects = Project.select().where(Project.in_trash == False)
         for project in projects:
@@ -290,8 +222,7 @@ class CuemsProject(StringSanitizer):
 
         return project_list
     
-    @staticmethod
-    def list_trash():
+    def list_trash(self):
         project_trash_list = list()
         projects_trash = Project.select().where(Project.in_trash == True)
         for project in projects_trash:
@@ -300,11 +231,10 @@ class CuemsProject(StringSanitizer):
 
         return project_trash_list
 
-    @staticmethod
-    def update(uuid, data):   #TODO: check uuid format
+    def update(self, uuid, data):   #TODO: check uuid format
         try:
             project = Project.get((Project.uuid==uuid) & (Project.in_trash == False))
-            with db.atomic() as transaction:
+            with self.db.atomic() as transaction:
                 try:
                     project.name=data['CuemsScript']['name']
                     now = date_now_iso_utc()
@@ -312,8 +242,8 @@ class CuemsProject(StringSanitizer):
                     project.modified=now
                     project.save()
                     project_object = CuemsParser(data).parse()
-                    CuemsProject.update_media_relations(project, project_object, data)
-                    CuemsProject.save_xml(project.unix_name, project_object)
+                    self.update_media_relations(project, project_object, data)
+                    self.save_xml(project.unix_name, project_object)
                 except Exception as e:
                     logger.error("error: {} {} triying to update  project, rolling back database update".format(type(e), e))
                     transaction.rollback()
@@ -322,8 +252,7 @@ class CuemsProject(StringSanitizer):
         except DoesNotExist:
             raise NonExistentItemError("item with uuid: {} does not exit".format(uuid))
 
-    @staticmethod
-    def new(data):
+    def new(self, data):
         try:
             unix_name = StringSanitizer.sanitize_dir_permit_increment(data['CuemsScript']['unix_name'])
         except KeyError:
@@ -334,30 +263,29 @@ class CuemsProject(StringSanitizer):
         now = date_now_iso_utc()
         data['CuemsScript']['created'] = now
         data['CuemsScript']['modified'] = now
-        with db.atomic() as transaction:
+        with self.db.atomic() as transaction:
             try:
                 project = Project.create(uuid=project_uuid, unix_name=unix_name, name=data['CuemsScript']['name'], created=now, modified=now)
-                os.mkdir(os.path.join(CuemsProject.projects_path, unix_name))
+                os.mkdir(os.path.join(self.projects_path, unix_name))
                 project_object = CuemsParser(data).parse()
-                CuemsProject.add_media_relations(project, project_object, data)
-                CuemsProject.save_xml(unix_name, project_object)
+                self.add_media_relations(project, project_object, data)
+                self.save_xml(unix_name, project_object)
                 return project_uuid
             except Exception as e:
                 logger.error("error: {} {} ;triying to make new  project, rolling back database insert".format(type(e), e))
                 transaction.rollback()
-                if os.path.exists(os.path.join(CuemsProject.projects_path, unix_name)):
-                    shutil.rmtree(os.path.join(CuemsProject.projects_path, unix_name) )                
+                if os.path.exists(os.path.join(self.projects_path, unix_name)):
+                    shutil.rmtree(os.path.join(self.projects_path, unix_name) )                
                 raise e
 
-    @staticmethod
-    def duplicate(uuid):
+    def duplicate(self, uuid):
         try:
             project = Project.get((Project.uuid==uuid) & (Project.in_trash == False))
-            with db.atomic() as transaction:
+            with self.db.atomic() as transaction:
                 try:
                     new_unix_name = None
-                    project_path = os.path.join(CuemsProject.projects_path, project.unix_name)
-                    new_unix_name = CopyMoveVersioned.copy_dir(project_path, CuemsProject.projects_path, project.unix_name)
+                    project_path = os.path.join(self.projects_path, project.unix_name)
+                    new_unix_name = CopyMoveVersioned.copy_dir(project_path, self.projects_path, project.unix_name)
                     project.unix_name = new_unix_name
                     new_uuid = str(uuid_module.uuid1())
                     project.uuid = new_uuid
@@ -366,31 +294,30 @@ class CuemsProject(StringSanitizer):
                     project.save(force_insert=True)
 
                     dup_project= Project.get(Project.uuid==new_uuid)
-                    data = CuemsProject.load_xml(dup_project.unix_name)
+                    data = self.load_xml(dup_project.unix_name)
                     project_object = CuemsParser(data).parse()
-                    CuemsProject.add_media_relations(dup_project, project_object, data)
+                    self.add_media_relations(dup_project, project_object, data)
                     return new_uuid
                 except Exception as e:
                     logger.error("error: {} {}; triying to duplicate  project, rolling back database update".format(type(e), e))
                     transaction.rollback()
                     if new_unix_name is None:  # if move or copy where not sucessfull with dont need to clean and can end here forwarding the exception, else continue cleaning and then forward the exception
                         raise e
-                    if os.path.exists(os.path.join(CuemsProject.projects_path, new_unix_name)):
-                        shutil.rmtree(os.path.join(CuemsProject.projects_path, new_unix_name))
+                    if os.path.exists(os.path.join(self.projects_path, new_unix_name)):
+                        shutil.rmtree(os.path.join(self.projects_path, new_unix_name))
                     raise e
             
         except DoesNotExist:
             raise NonExistentItemError("item with uuid: {} does not exit".format(uuid))
 
-    @staticmethod
-    def delete(uuid):
+    def delete(self, uuid):
         try:
             project = Project.get((Project.uuid==uuid) & (Project.in_trash == False))
-            with db.atomic() as transaction:
+            with self.db.atomic() as transaction:
                 try:
                     dest_filename = None
-                    file_path = os.path.join(CuemsProject.projects_path, project.unix_name)
-                    dest_filename = CopyMoveVersioned.move(file_path, CuemsProject.trash_path, project.unix_name)
+                    file_path = os.path.join(self.projects_path, project.unix_name)
+                    dest_filename = CopyMoveVersioned.move(file_path, self.trash_path, project.unix_name)
                     project.in_trash = True
                     project.save()
                     logger.debug('deleting instance from table: {}'.format(project))
@@ -399,23 +326,22 @@ class CuemsProject(StringSanitizer):
                     transaction.rollback()
                     if dest_filename is None:  # if move or copy where not sucessfull with dont need to clean and can end here forwarding the exception, else continue cleaning and then forward the exception
                         raise e
-                    if os.path.exists(os.path.join(CuemsProject.trash_path, dest_filename)):
-                        shutil.move( os.path.join(CuemsProject.trash_path, dest_filename), os.path.join(CuemsProject.projects_path, project.unix_name))
+                    if os.path.exists(os.path.join(self.trash_path, dest_filename)):
+                        shutil.move( os.path.join(self.trash_path, dest_filename), os.path.join(self.projects_path, project.unix_name))
                     raise e
 
         except DoesNotExist:
             raise NonExistentItemError("item with uuid: {} does not exit".format(uuid))
     
-    @staticmethod
-    def restore(uuid):
+    def restore(self, uuid):
         try:
             project_trash = Project.get((Project.uuid==uuid) & (Project.in_trash == True))
         
-            with db.atomic() as transaction:
+            with self.db.atomic() as transaction:
                 try:
                     dest_filename = None
-                    project_path = os.path.join(CuemsProject.trash_path, project_trash.unix_name)
-                    dest_filename = CopyMoveVersioned.move(project_path, CuemsProject.projects_path, project_trash.unix_name)
+                    project_path = os.path.join(self.trash_path, project_trash.unix_name)
+                    dest_filename = CopyMoveVersioned.move(project_path, self.projects_path, project_trash.unix_name)
                     project_trash.in_trash = False
                     project_trash.save()
                     logger.debug('deleting instance from table: {}'.format(project_trash))
@@ -424,20 +350,19 @@ class CuemsProject(StringSanitizer):
                     transaction.rollback()
                     if dest_filename is None:  # if move or copy where not sucessfull with dont need to clean and can end here forwarding the exception, else continue cleaning and then forward the exception
                         raise e
-                    if os.path.exists(os.path.join(CuemsProject.projects_path, dest_filename)):
-                        shutil.move( os.path.join(CuemsProject.projects_path, dest_filename), os.path.join(CuemsProject.trash_path, project_path.unix_name))
+                    if os.path.exists(os.path.join(self.projects_path, dest_filename)):
+                        shutil.move( os.path.join(self.projects_path, dest_filename), os.path.join(self.trash_path, project_path.unix_name))
                     raise e
         except DoesNotExist:
             raise NonExistentItemError("item with uuid: {} does not exit".format(uuid))
 
-    @staticmethod
-    def delete_from_trash(uuid):
+    def delete_from_trash(self, uuid):
         try:
             project = Project.get((Project.uuid==uuid) & (Project.in_trash == True))
 
-            with db.atomic() as transaction:
+            with self.db.atomic() as transaction:
                 try:
-                    project_path = os.path.join(CuemsProject.trash_path, project.unix_name)
+                    project_path = os.path.join(self.trash_path, project.unix_name)
                     project.delete_instance(recursive=True)
                     shutil.rmtree(project_path)  #non empty dir, must use rmtree
                     logger.debug('deleting project from trash: {}'.format(project))
@@ -448,15 +373,13 @@ class CuemsProject(StringSanitizer):
         except DoesNotExist:
             raise NonExistentItemError("item with uuid: {} does not exit".format(uuid))
 
-    @staticmethod
-    def add_media_relations(project, project_object, data):
+    def add_media_relations(self, project, project_object, data):
         media_dict = project_object.get_media()
         for media_name, value in media_dict.items():
             media = Media.get(Media.unix_name==media_name)
             ProjectMedia.create( project=project, media=media)    
     
-    @staticmethod
-    def update_media_relations(project, project_object, data):
+    def update_media_relations(self, project, project_object, data):
         old_media_query = project.medias()
         old_media_dict = dict()
         for media in old_media_query:
@@ -484,19 +407,16 @@ class CuemsProject(StringSanitizer):
                 ProjectMedia.create( project=project, media=media)
 
     
-    @staticmethod
-    def save_xml(unix_name, project_object):
+    def save_xml(self, unix_name, project_object):
 
-        writer = XmlWriter(schema = '/home/ion/src/cuems/python/cuems-engine/src/cuems/cues.xsd', xmlfile = (os.path.join(CuemsProject.projects_path, unix_name, 'script.xml')))
+        writer = XmlWriter(schema = '/home/ion/src/cuems/python/cuems-engine/src/cuems/cues.xsd', xmlfile = (os.path.join(self.projects_path, unix_name, 'script.xml')))
         writer.write_from_object(project_object)
 
 
-    @staticmethod
-    def load_xml(unix_name):
-        reader = XmlReader(schema = '/home/ion/src/cuems/python/cuems-engine/src/cuems/cues.xsd', xmlfile = (os.path.join(CuemsProject.projects_path, unix_name, 'script.xml')))
+    def load_xml(self, unix_name):
+        reader = XmlReader(schema = '/home/ion/src/cuems/python/cuems-engine/src/cuems/cues.xsd', xmlfile = (os.path.join(self.projects_path, unix_name, 'script.xml')))
         return reader.read()
         
 
-CuemsLibraryMaintenance.check_dir_hierarchy()
-db.create_tables([Project, Media,  ProjectMedia])
+
 
