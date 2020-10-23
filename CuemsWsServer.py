@@ -49,18 +49,20 @@ class CuemsWsServer():
         self.state = {"value": 0} #TODO: provisional
         self.users = dict()
         self.sessions = dict()
-        self.tmp_upload_path = settings_dict['tmp_upload_path']
-        self.session_uuid = settings_dict['session_uuid']
-        self.library_path = settings_dict['library_path']
+        self.settings_dict = settings_dict
+        try:
+            self.tmp_upload_path = self.settings_dict['tmp_upload_path']
+            self.session_uuid = self.settings_dict['session_uuid']
+            self.library_path = self.settings_dict['library_path']
+        except KeyError as e:
+            logger.error(f'can not read settings {e}')
+            raise e
         logger.debug(f'library path set to : {self.library_path}')
 
         if (not os.path.exists(self.tmp_upload_path)) or ( not os.access(self.tmp_upload_path,  os.X_OK & os.R_OK & os.W_OK)):
             logger.error("error: upload folder is not usable")
             raise FileNotFoundError('Can not access upload folder')
 
-        self.db = CuemsDBManager(settings_dict)
-
-        
 
     def start(self, port):
         self.process = Process(target=self.run_async_server, args=(self.queue,))
@@ -71,6 +73,7 @@ class CuemsWsServer():
         
 
     def run_async_server(self, event):
+        self.db = CuemsDBManager(self.settings_dict)
         self.event_loop = asyncio.new_event_loop()
         asyncio.set_event_loop(self.event_loop)
         self.executor =  concurrent.futures.ThreadPoolExecutor(thread_name_prefix='ws_ProjectManager_ThreadPoolExecutor', max_workers=5) # TODO: adjust max workers
@@ -80,7 +83,7 @@ class CuemsWsServer():
             self.event_loop.add_signal_handler(sig, self.ask_exit)
         logger.info('server listening on {}, port {}'.format(self.host, self.port))
         self.event_loop.run_until_complete(self.project_server)
-    #    self.event_loop.create_task(self.queue_handler())
+        self.event_loop.create_task(self.queue_handler())
         self.event_loop.run_forever()
         self.event_loop.close()
         
@@ -109,7 +112,18 @@ class CuemsWsServer():
         """
         return (yield from self.event_loop.run_in_executor(concurrent.futures.ThreadPoolExecutor(thread_name_prefix='ws_QueueGet_ThreadPoolExecutor', max_workers=2), 
                                            self.queue.get))
-            
+
+    async def queue_handler(self):
+        while True:
+            item = await self.async_get()
+            if self.users:
+                message = json.dumps({"type": "play_status", "value": item})
+                for user in self.users:
+                    print(f'user {id(user)} gets {item}')
+                    await user.outgoing.put(message)
+            else:
+                print(f'No user to  get {item}')
+                    
 
     async def connection_handler(self, websocket, path):
         
@@ -131,9 +145,8 @@ class CuemsWsServer():
             producer_task = asyncio.create_task(user_session.producer_handler())
             # start 3 message processing task so a load or any other time consuming action still leaves with 2 tasks running  and interface feels responsive. TODO:discuss this
             processor_tasks = [asyncio.create_task(user_session.consumer()) for _ in range(3)]
-            queue_task = asyncio.create_task(user_session.queue_handler())
             
-            done_tasks, pending_tasks = await asyncio.wait([consumer_task, producer_task, *processor_tasks, queue_task], return_when=asyncio.FIRST_COMPLETED)
+            done_tasks, pending_tasks = await asyncio.wait([consumer_task, producer_task, *processor_tasks], return_when=asyncio.FIRST_COMPLETED)
             for task in pending_tasks:
                 task.cancel()
 
@@ -254,13 +267,6 @@ class CuemsWsUser():
         self.websocket = websocket
         self.session_id = None
         server.users[self] = None
-
-    async def queue_handler(self):
-        while True:
-            item = await self.server.async_get()
-            print(f'{id(self.websocket)} gets {item}')
-            message = json.dumps({"type": "play_status", "value": item})
-            await self.outgoing.put(message)
 
     async def consumer_handler(self):
         try:

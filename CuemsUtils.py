@@ -1,16 +1,33 @@
 import os
 import shutil
-import getpass
 import datetime
+import uuid as uuid_module
 from ..log import logger
 
-username = getpass.getuser()
-if username == 'root': # TODO: this is temporal
-    username = 'stagelab'
 
 
 def date_now_iso_utc():
     return datetime.datetime.utcnow().isoformat()
+
+class CuemsUuid():
+    def __init__(self):
+        self.last_uuid = None
+
+    def ensure_unique_uuid(self):
+        if self.last_uuid is None:
+            return str(uuid_module.uuid1())
+        else:
+            while True:
+                new_uuid = str(uuid_module.uuid1())
+                if new_uuid != self.last_uuid:
+                    self.last_uuid = new_uuid
+                    return new_uuid
+                else:
+                    print('existing uuid, generating another one')
+                    continue
+
+def create_unique_uuid():
+    pass    
 
 class StringSanitizer():
     

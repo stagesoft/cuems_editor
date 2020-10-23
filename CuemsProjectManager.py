@@ -23,17 +23,41 @@ pewee_logger.addHandler(handler)
 
 
 
+SCRIPT_SCHEMA_FILE_PATH = '/etc/cuems/script.xsd' #TODO: get all this constants from config?
+
+SCRIPT_FILE_NAME = 'script.xml'
+PROJECT_FOLDER_NAME = 'projects'
+MEDIA_FOLDER_NAME = 'media'
+TRASH_FOLDER_NAME = 'trash'
+
+
+
 
 class CuemsDBManager():
     
     def __init__(self,settings_dict):
-        self.library_path = settings_dict['library_path']
-        self.db_name = settings_dict['database_name']
+
+        try:
+            self.library_path = settings_dict['library_path']
+            self.db_name = settings_dict['database_name']
+        except KeyError as e:
+            logger.error(f'can not read settings {e}')
+            raise e
+
+        self.xsd_path = SCRIPT_SCHEMA_FILE_PATH
         self.db_path = os.path.join(self.library_path, self.db_name)
+        self.models = [Project, Media,  ProjectMedia]
         database.init(self.db_path)
         database.connect()
-        database.create_tables([Project, Media,  ProjectMedia])
-        self.project = CuemsDBProject(self.library_path, database)
+        logger.debug(f'database connected {database}, {self.db_name}')
+        for model in self.models:
+            if database.table_exists(model._meta.table):
+                continue
+            else:
+                logger.warning(f'table "{model._meta.table_name	}" does not exist, creating')
+        # safe=True uses IF NOT EXIST on table create
+        database.create_tables( self.models, safe=True) 
+        self.project = CuemsDBProject(self.library_path, self.xsd_path, database)
         self.media = CuemsDBMedia(self.library_path, database)
 
 class CuemsDBMedia(StringSanitizer):
@@ -41,8 +65,8 @@ class CuemsDBMedia(StringSanitizer):
     def __init__(self, library_path, db_connection):
         self.library_path = library_path
         self.db = db_connection
-        self.media_path = os.path.join(self.library_path, 'media')
-        self.trash_path = os.path.join(self.library_path, 'trash', 'media')
+        self.media_path = os.path.join(self.library_path, MEDIA_FOLDER_NAME)
+        self.trash_path = os.path.join(self.library_path, TRASH_FOLDER_NAME, MEDIA_FOLDER_NAME)
     
     def new(self, tmp_file_path, filename):
         with self.db.atomic() as transaction:
@@ -197,11 +221,12 @@ class CuemsDBMedia(StringSanitizer):
 
 class CuemsDBProject(StringSanitizer):
 
-    def __init__(self, library_path, db_connection):
+    def __init__(self, library_path, xsd_path, db_connection):
         self.library_path = library_path
+        self.xsd_path = xsd_path
         self.db = db_connection
-        self.projects_path = os.path.join(self.library_path, 'projects')
-        self.trash_path = os.path.join(self.library_path, 'trash', 'projects')
+        self.projects_path = os.path.join(self.library_path, PROJECT_FOLDER_NAME)
+        self.trash_path = os.path.join(self.library_path, TRASH_FOLDER_NAME, PROJECT_FOLDER_NAME)
     
     
     
@@ -409,12 +434,12 @@ class CuemsDBProject(StringSanitizer):
     
     def save_xml(self, unix_name, project_object):
 
-        writer = XmlWriter(schema = '/home/ion/src/cuems/python/cuems-engine/src/cuems/cues.xsd', xmlfile = (os.path.join(self.projects_path, unix_name, 'script.xml')))
+        writer = XmlWriter(schema = self.xsd_path, xmlfile = (os.path.join(self.projects_path, unix_name, SCRIPT_FILE_NAME)))
         writer.write_from_object(project_object)
 
 
     def load_xml(self, unix_name):
-        reader = XmlReader(schema = '/home/ion/src/cuems/python/cuems-engine/src/cuems/cues.xsd', xmlfile = (os.path.join(self.projects_path, unix_name, 'script.xml')))
+        reader = XmlReader(schema = self.xsd_path, xmlfile = (os.path.join(self.projects_path, unix_name, SCRIPT_FILE_NAME)))
         return reader.read()
         
 
