@@ -342,11 +342,13 @@ class CuemsWsUser():
                 await self.notify_error_to_user('error processing request')
 
 
-    async def notify_user(self, msg=None, uuid=None, action=None):
+    async def notify_user(self, msg=None, uuid=None,  action=None, new_uuid=None):
         if (uuid is None) and (action is None) and (msg is not None):
             await self.outgoing.put(json.dumps({"type": "state", "value":msg}))
-        elif (msg is None):
+        elif (msg is None and new_uuid is None):
             await self.outgoing.put(json.dumps({"type": action, "value": uuid}))
+        elif (msg is None and new_uuid is not None):
+            await self.outgoing.put(json.dumps({"type": action, "value": { "uuid" : uuid, "new_uuid" : new_uuid}}))
 
     async def notify_error_to_user(self, msg=None, uuid=None, action=None):
         if (msg is not None) and (uuid is None) and (action is None):
@@ -439,7 +441,7 @@ class CuemsWsUser():
         try:
             logger.info("user {} duplicating project: {}".format(id(self.websocket), project_uuid))
             new_project_uuid = await self.server.event_loop.run_in_executor(self.server.executor, self.duplicate_project, project_uuid)
-            await self.notify_user(uuid=project_uuid, action=action)
+            await self.notify_user(uuid=project_uuid, action=action, new_project_uuid=new_project_uuid)
             await self.server.notify_others_list_changes(self, "project_list")
             await self.server.notify_others_list_changes(self, "file_list")
         except NonExistentItemError as e:
@@ -584,7 +586,7 @@ class CuemsWsUser():
 
     def duplicate_project(self, project_uuid):
         logger.debug('duplicating project, uuid:{}'.format(project_uuid))
-        self.server.db.project.duplicate(project_uuid)
+        return self.server.db.project.duplicate(project_uuid)
 
     def delete_project(self, project_uuid):
         self.server.db.project.delete(project_uuid)
