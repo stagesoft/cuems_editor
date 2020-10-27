@@ -32,15 +32,13 @@ formatter = logging.Formatter('Cuems:ws-server: %(levelname)s (PID: %(process)d)
 logger_ws_server = logging.getLogger('ws-server')
 logger_ws_server.setLevel(logging.DEBUG)
 handler.setFormatter(formatter)
-logger_ws_server.addHandler(handler)
 
 logger_asyncio = logging.getLogger('asyncio')
 logger_asyncio.setLevel(logging.INFO)  # asyncio debug level 
-logger_asyncio.addHandler(handler)
 
 logger_ws = logging.getLogger('websockets')
 logger_ws.setLevel(logging.INFO)  # websockets debug level,  in debug prints all frames, also binary frames! 
-logger_ws.addHandler(handler)
+
 
 class CuemsWsServer():
     

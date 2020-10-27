@@ -19,7 +19,6 @@ from ..XmlReaderWriter import XmlReader, XmlWriter
 pewee_logger = logging.getLogger('peewee')
 
 pewee_logger.setLevel(logging.INFO)
-pewee_logger.addHandler(handler)
 
 
 
