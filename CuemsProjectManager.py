@@ -5,6 +5,7 @@ import os
 import shutil
 import json
 import datetime
+import traceback
 
 
 from .CuemsDBModel import *
@@ -269,6 +270,7 @@ class CuemsDBProject(StringSanitizer):
                     self.update_media_relations(project, project_object, data)
                     self.save_xml(project.unix_name, project_object)
                 except Exception as e:
+                    logger.error(traceback.format_exc()) # TODO: clean, only for debug
                     logger.error("error: {} {} triying to update  project, rolling back database update".format(type(e), e))
                     transaction.rollback()
                     raise e
@@ -279,8 +281,8 @@ class CuemsDBProject(StringSanitizer):
     def new(self, data):
         try:
             unix_name = StringSanitizer.sanitize_dir_permit_increment(data['CuemsScript']['unix_name'])
-        except KeyError:
-            unix_name = StringSanitizer.sanitize_dir_name(data['CuemsScript']['name'])
+        except KeyError as e:
+            raise e
         
         project_uuid = str(uuid_module.uuid1())
         data['CuemsScript']['uuid']= project_uuid
@@ -296,10 +298,12 @@ class CuemsDBProject(StringSanitizer):
                 self.save_xml(unix_name, project_object)
                 return project_uuid
             except Exception as e:
+                logger.error(traceback.format_exc()) # TODO: clean, only for debug
                 logger.error("error: {} {} ;triying to make new  project, rolling back database insert".format(type(e), e))
                 transaction.rollback()
                 if os.path.exists(os.path.join(self.projects_path, unix_name)):
-                    shutil.rmtree(os.path.join(self.projects_path, unix_name) )                
+                    shutil.rmtree(os.path.join(self.projects_path, unix_name) )
+                             
                 raise e
 
     def duplicate(self, uuid):
