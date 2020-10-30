@@ -188,10 +188,11 @@ class CuemsWsServer():
         return uuid
 
     async def load_session(self, user_session):
-        try:
-            await user_session.send_project(self.sessions[user_session.session_id]['loaded_project'], 'project_load')
-        except KeyError:
-            pass
+        pass
+        # try:
+        #     await user_session.send_project(self.sessions[user_session.session_id]['loaded_project'], 'project_load')
+        # except KeyError:
+        #     pass
     
     async def notify_session(self, user_session, uuid):
         message = json.dumps({"type": "session_id", "value": uuid})

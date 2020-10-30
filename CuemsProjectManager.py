@@ -8,11 +8,11 @@ import datetime
 import traceback
 
 
-from .CuemsDBModel import *
+from .CuemsDBModel import * # imports Media (DB model)
 from .CuemsUtils import StringSanitizer, CopyMoveVersioned, CuemsLibraryMaintenance, date_now_iso_utc
 from .CuemsErrors import *
 from ..log import *
-from ..DictParser import *
+from ..DictParser import CuemsParser # do not import Media (File class) TODO: change this? name conflict Media (DB model) and Media ( Cue class)
 from ..XmlBuilder import XmlBuilder
 from ..XmlReaderWriter import XmlReader, XmlWriter
 
