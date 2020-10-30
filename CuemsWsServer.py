@@ -168,16 +168,18 @@ class CuemsWsServer():
     async def check_session(self, user_session, path):
         session_uuid_patern = r"/\?session=(?P<uuid>[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[1][0-9A-Fa-f]{3}-[89AB][0-9A-Fa-f]{3}-[0-9A-Fa-f]{12})?"
         matches = re.search(session_uuid_patern, path)
-        if (matches.groupdict()['uuid'] != None):
-            uuid = matches.groupdict()['uuid']
-            if uuid  not in self.sessions:
-                logger.debug(f"uuid not found {uuid}, creating new session")
-                uuid = str(uuid_module.uuid1())
+        if matches:
+            if (matches.groupdict()['uuid'] != None):
+                uuid = matches.groupdict()['uuid']
+                if uuid  not in self.sessions:
+                    logger.debug(f"uuid not found {uuid}, creating new session")
+                    uuid = str(uuid_module.uuid1())
+                else:
+                    logger.debug(f"session_id found, reusing {uuid}")
             else:
-                logger.debug(f"session_id found, reusing {uuid}")
+                uuid = str(uuid_module.uuid1())
         else:
             uuid = str(uuid_module.uuid1())
-        
         try:
             self.sessions[uuid]['ws']=id(user_session.websocket)
         except KeyError:
