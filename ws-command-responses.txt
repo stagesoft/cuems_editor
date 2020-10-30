@@ -13,13 +13,13 @@ Commands 													 ->	Responses
 
 
 {"action" : "project_list"}  									->  {"type": "project_list", "value": "project_list_json"}
-{"action" : "project_load", "value" : "project_uuid"}   		->  {"type": "project", "value":"project_json"}
-{"action" : "project_save", "value" : "project_json"}   		->  {"type": "project_save", "value":"project_uuid"}
-{"action" : "project_delete", "value" : "project_uuid"} 		->  {"type": "project_delete", "value":"project_uuid"}
+{"action" : "project_load", "value" : "project_uuid"}   		->  {"type": "project", "value": "project_json"}
+{"action" : "project_save", "value" : "project_json"}   		->  {"type": "project_save", "value": "project_uuid"}
+{"action" : "project_delete", "value" : "project_uuid"} 		->  {"type": "project_delete", "value": "project_uuid"}
 {"action" : "project_trash_list"}  							 	->  {"type": "project_trash_list", "value": "project_trash_list_json"}
-{"action" : "project_recover", "value" : "project_uuid"}  		->  {"type": "project_recover", "value":"project_uuid"}
-{"action" : "project_trash_delete", "value" : "project_uuid"}	->  {"type": "project_trash_delete", "value":"project_uuid"}
-{"action" : "project_duplicate", "value" : "project_uuid"}		->  {"type": "project_duplicate", "value":"project_uuid"}
+{"action" : "project_recover", "value" : "project_uuid"}  		->  {"type": "project_recover", "value": "project_uuid"}
+{"action" : "project_trash_delete", "value" : "project_uuid"}	->  {"type": "project_trash_delete", "value": "project_uuid"}
+{"action" : "project_duplicate", "value" : "project_uuid"}		->  {"type": "project_duplicate", "value": {"uuid": "project_uuid", "new_uuid": "duplicated_project_uuid" }
 
 
 {"action" : "file_list"}  										->  {"type": "file_list", "value": "file_list_json"}
@@ -27,8 +27,8 @@ Commands 													 ->	Responses
 {"action" : "file_save", "value" : "file_json"}  				->  {"type": "file_save", "value": "file_uuid"}
 {"action" : "file_delete", "value" : "file_uuid"}  				->  {"type": "file_delete", "value": "file_uuid"}
 {"action" : "file_trash_list"}  								->  {"type": "file_trash_list", "value": "file_trash_list_json"}
-{"action" : "file_recover", "value" : "file_uuid"}  			->  {"type": "file_recover", "value":"file_uuid"}
-{"action" : "file_trash_delete", "value" : "file_uuid"}			->  {"type": "file_trash_delete", "value":"file_uuid"}
+{"action" : "file_recover", "value" : "file_uuid"}  			->  {"type": "file_recover", "value": "file_uuid"}
+{"action" : "file_trash_delete", "value" : "file_uuid"}			->  {"type": "file_trash_delete", "value": "file_uuid"}
 
 
 

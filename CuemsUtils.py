@@ -1,17 +1,33 @@
 import os
 import shutil
-import getpass
+import datetime
+import uuid as uuid_module
 from ..log import logger
 
-username = getpass.getuser()
-if username == 'root': # TODO: this is temporal
-    username = 'stagelab'
 
 
-LIBRARY_PATH = os.path.join('/home', username, 'cuems_library')
+def date_now_iso_utc():
+    return datetime.datetime.utcnow().isoformat()
 
+class CuemsUuid():
+    def __init__(self):
+        self.last_uuid = None
 
-logger.debug('library path set to : {}'.format(LIBRARY_PATH))
+    def ensure_unique_uuid(self):
+        if self.last_uuid is None:
+            return str(uuid_module.uuid1())
+        else:
+            while True:
+                new_uuid = str(uuid_module.uuid1())
+                if new_uuid != self.last_uuid:
+                    self.last_uuid = new_uuid
+                    return new_uuid
+                else:
+                    print('existing uuid, generating another one')
+                    continue
+
+def create_unique_uuid():
+    pass    
 
 class StringSanitizer():
     
@@ -78,28 +94,5 @@ class CopyMoveVersioned():
         return dest_dirname
 
 class CuemsLibraryMaintenance():
-
-    @staticmethod
-    def check_dir_hierarchy():
-        try:
-            if not os.path.exists(LIBRARY_PATH):
-                os.mkdir(LIBRARY_PATH)
-                logger.info('creating library forlder {}'.format(LIBRARY_PATH))
-
-            if not os.path.exists( os.path.join(LIBRARY_PATH, 'projects') ) :
-                os.mkdir(os.path.join(LIBRARY_PATH, 'projects'))
-
-            if not os.path.exists( os.path.join(LIBRARY_PATH, 'media') ) :
-                os.mkdir(os.path.join(LIBRARY_PATH, 'media'))
-
-            if not os.path.exists( os.path.join(LIBRARY_PATH, 'trash') ) :
-                os.mkdir(os.path.join(LIBRARY_PATH, 'trash'))
-
-            if not os.path.exists( os.path.join(LIBRARY_PATH, 'trash', 'projects') ) :
-                os.mkdir(os.path.join(LIBRARY_PATH, 'trash', 'projects'))
-
-            if not os.path.exists( os.path.join(LIBRARY_PATH, 'trash', 'media') ) :
-                os.mkdir(os.path.join(LIBRARY_PATH, 'trash', 'media'))
-
-        except Exception as e:
-            logger.error("error: {} {}".format(type(e), e))
+    def __init__(self, library_path):
+        self.library_path = library_path

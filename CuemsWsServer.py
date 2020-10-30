@@ -6,18 +6,21 @@ import os
 import shutil
 import aiofiles
 import websockets as ws
-from multiprocessing import Process, Event
+from multiprocessing import Process
+from queue import Empty
 import signal
 from random import randint
 from hashlib import md5
+import uuid as uuid_module
+import re
 
 import time
 
 from ..log import *
 
-from .CuemsProjectManager import CuemsMedia, CuemsProject
+from .CuemsProjectManager import CuemsDBManager, CuemsDBMedia, CuemsDBProject
 from .CuemsErrors import *
-from .CuemsUtils import StringSanitizer, CuemsLibraryMaintenance, LIBRARY_PATH
+from .CuemsUtils import StringSanitizer, CuemsLibraryMaintenance
 
 
 
@@ -29,39 +32,38 @@ formatter = logging.Formatter('Cuems:ws-server: %(levelname)s (PID: %(process)d)
 logger_ws_server = logging.getLogger('ws-server')
 logger_ws_server.setLevel(logging.DEBUG)
 handler.setFormatter(formatter)
-logger_ws_server.addHandler(handler)
 
 logger_asyncio = logging.getLogger('asyncio')
 logger_asyncio.setLevel(logging.INFO)  # asyncio debug level 
-logger_asyncio.addHandler(handler)
 
 logger_ws = logging.getLogger('websockets')
 logger_ws.setLevel(logging.INFO)  # websockets debug level,  in debug prints all frames, also binary frames! 
-logger_ws.addHandler(handler)
+
 
 class CuemsWsServer():
     
-
-    projects=[{"CuemsScript": {"uuid": "76861217-2d40-47a2-bdb5-8f9c91293855", "name": "Proyecto test 0", "date": "14/08/2020 11:18:16", "timecode_cuelist": {"CueList": {"Cue": [{"uuid": "bf2d217f-881d-47c1-9ad1-f5999769bcc5", "time": {"CTimecode": "00:00:33:00"}, "type": "mtc", "loop": "False", "outputs": {"CueOutputs": {"id": 5, "bla": "ble"}}}, {"uuid": "8ace53f3-74f5-4195-822e-93c12fdf3725", "time": {"NoneType": "None"}, "type": "floating", "loop": "False", "outputs": {"CueOutputs": {"physiscal": 1, "virtual": 3}}}], "AudioCue": {"uuid": "be288e38-887a-446f-8cbf-c16c9ec6724a", "time": {"CTimecode": "00:00:45:00"}, "type": "virtual", "loop": "True", "outputs": {"AudioCueOutputs": {"stereo": 1}}}}}, "floating_cuelist": {"CueList": {"DmxCue": {"uuid": "f36fa4b3-e220-4d75-bff1-210e14655c11", "time": {"CTimecode": "00:00:23:00"}, "dmx_scene": {"DmxScene": {"DmxUniverse": [{"id": 0, "DmxChannel": [{"id": 0, "&": 10}, {"id": 1, "&": 50}]}, {"id": 1, "DmxChannel": [{"id": 20, "&": 23}, {"id": 21, "&": 255}]}, {"id": 2, "DmxChannel": [{"id": 5, "&": 10}, {"id": 6, "&": 23}, {"id": 7, "&": 125}, {"id": 8, "&": 200}]}]}}, "outputs": {"DmxCueOutputs": {"universe0": 3}}}, "Cue": {"uuid": "17376d8f-84c6-4f28-859a-a01260a1dadb", "time": {"CTimecode": "00:00:05:00"}, "type": "virtual", "loop": "False", "outputs": {"CueOutputs": {"id": 3}}}}}}}, {"CuemsScript": {"uuid": "e05de59a-b281-4abf-83ba-97198d661a63", "name": "Segundo proyecto", "date": "13/08/2020 07:23:12", "timecode_cuelist": {"CueList": {"Cue": [{"uuid": "d47a75e2-f76e-4c77-b33e-e1df40ffdf02", "time": {"CTimecode": "00:00:33:00"}, "type": "mtc", "loop": "False", "outputs": {"CueOutputs": {"id": 5, "bla": "ble"}}}, {"uuid": "b5c35e3d-91f6-42d8-9825-0176354b44c1", "time": {"NoneType": "None"}, "type": "floating", "loop": "False", "outputs": {"CueOutputs": {"physiscal": 1, "virtual": 3}}}], "AudioCue": {"uuid": "aef5e289-03b0-4b39-99cd-90063d9b8c80", "time": {"CTimecode": "00:00:45:00"}, "type": "virtual", "loop": "True", "outputs": {"AudioCueOutputs": {"stereo": 1}}}}}, "floating_cuelist": {"CueList": {"DmxCue": {"uuid": "5d4ef443-5a49-4986-a283-9563ee7a9e85", "time": {"CTimecode": "00:00:23:00"}, "dmx_scene": {"DmxScene": {"DmxUniverse": [{"id": 0, "DmxChannel": [{"id": 0, "&": 10}, {"id": 1, "&": 50}]}, {"id": 1, "DmxChannel": [{"id": 20, "&": 23}, {"id": 21, "&": 255}]}, {"id": 2, "DmxChannel": [{"id": 5, "&": 10}, {"id": 6, "&": 23}, {"id": 7, "&": 125}, {"id": 8, "&": 200}]}]}}, "outputs": {"DmxCueOutputs": {"universe0": 3}}}, "Cue": {"uuid": "37f80125-1c41-4cce-aab1-13328dd8c94e", "time": {"CTimecode": "00:00:05:00"}, "type": "virtual", "loop": "False", "outputs": {"CueOutputs": {"id": 3}}}}}}}]
-    tmp_upload_forlder_path = '/tmp/cuemsupload'
-    
-    media_path = os.path.join(LIBRARY_PATH, 'media')     #TODO: get upload folder path from settings?
-    
-    def __init__(self):
+    def __init__(self, _queue, settings_dict ):
+        self.queue = _queue
         self.state = {"value": 0} #TODO: provisional
         self.users = dict()
+        self.sessions = dict()
+        self.settings_dict = settings_dict
         try:
-            if not os.path.exists(self.tmp_upload_forlder_path):
-                os.mkdir(self.tmp_upload_forlder_path)
-                logger.info('creating tmp upload folder {}'.format(self.tmp_upload_forlder_path))
-        except Exception as e:
-            logger.error("error: {} {}".format(type(e), e))
+            self.tmp_upload_path = self.settings_dict['tmp_upload_path']
+            self.session_uuid = self.settings_dict['session_uuid']
+            self.library_path = self.settings_dict['library_path']
+        except KeyError as e:
+            logger.error(f'can not read settings {e}')
+            raise e
+        logger.debug(f'library path set to : {self.library_path}')
 
+        if (not os.path.exists(self.tmp_upload_path)) or ( not os.access(self.tmp_upload_path,  os.X_OK & os.R_OK & os.W_OK)):
+            logger.error("error: upload folder is not usable")
+            raise FileNotFoundError('Can not access upload folder')
 
 
     def start(self, port):
-        self.event = Event()
-        self.process = Process(target=self.run_async_server, args=(self.event,))
+        self.process = Process(target=self.run_async_server, args=(self.queue,))
         self.port = port
         self.host = 'localhost'
         self.process.start()
@@ -69,15 +71,17 @@ class CuemsWsServer():
         
 
     def run_async_server(self, event):
+        self.db = CuemsDBManager(self.settings_dict)
         self.event_loop = asyncio.new_event_loop()
         asyncio.set_event_loop(self.event_loop)
-        self.executor =  concurrent.futures.ThreadPoolExecutor(thread_name_prefix='ws_load_ThreadPoolExecutor', max_workers=5) # TODO: adjust max workers
+        self.executor =  concurrent.futures.ThreadPoolExecutor(thread_name_prefix='ws_ProjectManager_ThreadPoolExecutor', max_workers=5) # TODO: adjust max workers
         #self.event_loop.set_exception_handler(self.exception_handler) ### TODO:UNCOMENT FOR PRODUCTION 
         self.project_server = ws.serve(self.connection_handler, self.host, self.port, max_size=None) #TODO: choose max packets size from ui and limit it here
         for sig in (signal.SIGINT, signal.SIGTERM):
             self.event_loop.add_signal_handler(sig, self.ask_exit)
         logger.info('server listening on {}, port {}'.format(self.host, self.port))
         self.event_loop.run_until_complete(self.project_server)
+        self.event_loop.create_task(self.queue_handler())
         self.event_loop.run_forever()
         self.event_loop.close()
         
@@ -97,21 +101,42 @@ class CuemsWsServer():
         logger.info('ws server closed')
         self.event_loop.call_soon(self.event_loop.stop)
         logger.info('event loop stoped')
+    
+    @asyncio.coroutine
+    def async_get(self):
+
+        """ Calls q.get() in a separate Thread. 
+        q.get is an I/O call, so it should release the GIL.
+        """
+        return (yield from self.event_loop.run_in_executor(concurrent.futures.ThreadPoolExecutor(thread_name_prefix='ws_QueueGet_ThreadPoolExecutor', max_workers=2), 
+                                           self.queue.get))
+
+    async def queue_handler(self):
+        while True:
+            item = await self.async_get()
+            if self.users:
+                message = json.dumps({"type": "play_status", "value": item})
+                for user in self.users:
+                    print(f'user {id(user)} gets {item}')
+                    await user.outgoing.put(message)
+            else:
+                print(f'No user to  get {item}')
+                    
 
     async def connection_handler(self, websocket, path):
         
         logger.info("new connection: {}, path: {}".format(websocket, path))
 
-        if path == '/':                                    # project manager
-            await self.project_manager_session(websocket)
+        if (path == '/' or path[0:9] == '/?session'):                                    # project manager
+            await self.project_manager_session(websocket, path)
         elif path == '/upload':                            # file upload
             await self.upload_session(websocket)
         else:
             logger.info("unknow path: {}".format(path))
 
-    async def project_manager_session(self, websocket):
+    async def project_manager_session(self, websocket, path):
         user_session = CuemsWsUser(self, websocket)
-        await self.register(user_session)
+        await self.register(user_session, path)
         await user_session.outgoing.put(self.counter_event())
         try:
             consumer_task = asyncio.create_task(user_session.consumer_handler())
@@ -120,7 +145,6 @@ class CuemsWsServer():
             processor_tasks = [asyncio.create_task(user_session.consumer()) for _ in range(3)]
             
             done_tasks, pending_tasks = await asyncio.wait([consumer_task, producer_task, *processor_tasks], return_when=asyncio.FIRST_COMPLETED)
-
             for task in pending_tasks:
                 task.cancel()
 
@@ -134,10 +158,47 @@ class CuemsWsServer():
         await user_upload_session.message_handler()
         logger.info("upload session ended: {}".format(user_upload_session))
 
-    async def register(self, user_task):
-        logger.info("user registered: {}".format(id(user_task.websocket)))
-        self.users[user_task] = None
+    async def register(self, user_session, path):
+        logger.info("user registered: {}".format(id(user_session.websocket)))
+        self.users[user_session] = None
         await self.notify_users("users")
+        user_session.session_id =  await self.check_session(user_session, path)
+        await self.load_session(user_session)
+
+    async def check_session(self, user_session, path):
+        session_uuid_patern = r"/\?session=(?P<uuid>[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[1][0-9A-Fa-f]{3}-[89AB][0-9A-Fa-f]{3}-[0-9A-Fa-f]{12})?"
+        matches = re.search(session_uuid_patern, path)
+        if matches:
+            if (matches.groupdict()['uuid'] != None):
+                uuid = matches.groupdict()['uuid']
+                if uuid  not in self.sessions:
+                    logger.debug(f"uuid not found {uuid}, creating new session")
+                    uuid = str(uuid_module.uuid1())
+                else:
+                    logger.debug(f"session_id found, reusing {uuid}")
+            else:
+                uuid = str(uuid_module.uuid1())
+        else:
+            uuid = str(uuid_module.uuid1())
+        try:
+            self.sessions[uuid]['ws']=id(user_session.websocket)
+        except KeyError:
+            self.sessions[uuid]= {'ws': id(user_session.websocket)}
+
+        await self.notify_session(user_session, uuid)
+
+        return uuid
+
+    async def load_session(self, user_session):
+        pass
+        # try:
+        #     await user_session.send_project(self.sessions[user_session.session_id]['loaded_project'], 'project_load')
+        # except KeyError:
+        #     pass
+    
+    async def notify_session(self, user_session, uuid):
+        message = json.dumps({"type": "session_id", "value": uuid})
+        await user_session.outgoing.put(message)
 
     async def unregister(self, user_task):
         logger.info("user unregistered: {}".format(id(user_task.websocket)))
@@ -205,6 +266,7 @@ class CuemsWsUser():
         self.incoming = asyncio.Queue()
         self.outgoing = asyncio.Queue()
         self.websocket = websocket
+        self.session_id = None
         server.users[self] = None
 
     async def consumer_handler(self):
@@ -216,7 +278,7 @@ class CuemsWsUser():
 
     async def producer_handler(self):
         while True:
-            message = await self.producer()
+            message = await self.outgoing.get()
             try:
                 await self.websocket.send(message)
             except (ws.exceptions.ConnectionClosed, ws.exceptions.ConnectionClosedOK, ws.exceptions.ConnectionClosedError) as e:
@@ -281,16 +343,13 @@ class CuemsWsUser():
                 await self.notify_error_to_user('error processing request')
 
 
-    async def producer(self):
-        while True:
-            message = await self.outgoing.get()
-            return message
-
-    async def notify_user(self, msg=None, uuid=None, action=None):
+    async def notify_user(self, msg=None, uuid=None,  action=None, new_uuid=None):
         if (uuid is None) and (action is None) and (msg is not None):
             await self.outgoing.put(json.dumps({"type": "state", "value":msg}))
-        elif (msg is None):
+        elif (msg is None and new_uuid is None):
             await self.outgoing.put(json.dumps({"type": action, "value": uuid}))
+        elif (msg is None and new_uuid is not None):
+            await self.outgoing.put(json.dumps({"type": action, "value": { "uuid" : uuid, "new_uuid" : new_uuid}}))
 
     async def notify_error_to_user(self, msg=None, uuid=None, action=None):
         if (msg is not None) and (uuid is None) and (action is None):
@@ -319,6 +378,7 @@ class CuemsWsUser():
             msg = json.dumps({"type":"project", "value":project})
             await self.outgoing.put(msg)
             self.server.users[self] = project_uuid
+            self.server.sessions[self.session_id]['loaded_project']=project_uuid
         except NonExistentItemError as e:
             logger.info(e)
             await self.notify_error_to_user(str(e), uuid=project_uuid, action=action )
@@ -382,7 +442,7 @@ class CuemsWsUser():
         try:
             logger.info("user {} duplicating project: {}".format(id(self.websocket), project_uuid))
             new_project_uuid = await self.server.event_loop.run_in_executor(self.server.executor, self.duplicate_project, project_uuid)
-            await self.notify_user(uuid=project_uuid, action=action)
+            await self.notify_user(uuid=project_uuid, action=action, new_project_uuid=new_project_uuid)
             await self.server.notify_others_list_changes(self, "project_list")
             await self.server.notify_others_list_changes(self, "file_list")
         except NonExistentItemError as e:
@@ -510,63 +570,63 @@ class CuemsWsUser():
     # call blocking functions asynchronously with run_in_executor ThreadPoolExecutor
     def load_project_list(self):
         logger.info("loading project list")
-        return CuemsProject.list()
+        return self.server.db.project.list()
 
     
     def load_project(self, project_uuid):
         logger.info("loading project: {}".format(project_uuid))
-        return CuemsProject.load(project_uuid)
+        return self.server.db.project.load(project_uuid)
 
     def new_project(self, data):
         logger.debug('saving new project, data:{}'.format(data))
-        return CuemsProject.new(data)
+        return self.server.db.project.new(data)
 
     def update_project(self, project_uuid, data):
         logger.debug('saving project, uuid:{}, data:{}'.format(project_uuid, data))
-        CuemsProject.update(project_uuid, data)
+        self.server.db.project.update(project_uuid, data)
 
     def duplicate_project(self, project_uuid):
         logger.debug('duplicating project, uuid:{}'.format(project_uuid))
-        CuemsProject.duplicate(project_uuid)
+        return self.server.db.project.duplicate(project_uuid)
 
     def delete_project(self, project_uuid):
-        CuemsProject.delete(project_uuid)
+        self.server.db.project.delete(project_uuid)
 
     def restore_project(self, project_uuid):
-        CuemsProject.restore(project_uuid)
+        self.server.db.project.restore(project_uuid)
 
     def load_project_trash_list(self):
         logger.info("loading project trash list")
-        return CuemsProject.list_trash()
+        return self.server.db.project.list_trash()
 
     def delete_project_trash(self, project_uuid):
-        CuemsProject.delete_from_trash(project_uuid)
+        self.server.db.project.delete_from_trash(project_uuid)
 
     def load_file_list(self):
         logger.info("loading file list")
-        return CuemsMedia.list()
+        return self.server.db.media.list()
 
     def load_file_meta(self, uuid):
         logger.info("loading file list")
-        return CuemsMedia.load_meta(uuid)
+        return self.server.db.media.load_meta(uuid)
 
 
     def save_file(self, file_uuid, data):
         logger.info("saving file data")
-        CuemsMedia.save(file_uuid, data)
+        self.server.db.media.save(file_uuid, data)
 
     def delete_file(self, file_uuid):
-        CuemsMedia.delete(file_uuid)
+        self.server.db.media.delete(file_uuid)
 
     def restore_file(self, file_uuid):
-        CuemsMedia.restore(file_uuid)
+        self.server.db.media.restore(file_uuid)
 
     def load_file_trash_list(self):
         logger.info("loading file trash list")
-        return CuemsMedia.list_trash()
+        return self.server.db.media.list_trash()
 
     def delete_file_trash(self, file_uuid):
-        CuemsMedia.delete_from_trash(file_uuid)
+        self.server.db.media.delete_from_trash(file_uuid)
 
 class CuemsUpload(StringSanitizer):
 
@@ -580,8 +640,8 @@ class CuemsUpload(StringSanitizer):
     def __init__(self, server, websocket):
         self.server = server
         self.websocket = websocket
-        self.tmp_upload_forlder_path = server.tmp_upload_forlder_path
-        self.media_path = server.media_path
+        self.tmp_upload_path = self.server.tmp_upload_path
+        self.media_path = self.server.db.media.media_path
         
     async def message_handler(self):
         while True:
@@ -653,7 +713,7 @@ class CuemsUpload(StringSanitizer):
             
             await self.server.event_loop.run_in_executor(self.server.executor, self.check_file_integrity,  self.tmp_file_path(), received_md5)
             
-            await self.server.event_loop.run_in_executor(self.server.executor, CuemsMedia.new,  self.tmp_file_path(), self.filename)
+            await self.server.event_loop.run_in_executor(self.server.executor, self.server.db.media.new,  self.tmp_file_path(), self.filename)
             self.tmp_filename = None
             logger.debug('upload completed')
             await self.message_sender(json.dumps({"close" : True}))
@@ -674,7 +734,7 @@ class CuemsUpload(StringSanitizer):
 
     def tmp_file_path(self):
         if not self.tmp_filename is None:
-            return os.path.join(self.tmp_upload_forlder_path, self.tmp_filename)
+            return os.path.join(self.tmp_upload_path, self.tmp_filename)
 
     def __del__(self):
         try:
