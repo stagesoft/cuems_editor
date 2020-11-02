@@ -87,7 +87,7 @@ class CuemsDBMedia(StringSanitizer):
         media_list = list()
 
         medias = (Media
-         .select(Media.uuid, Media.name, Media.unix_name, Media.created, Media.modified, 
+         .select(Media.uuid, Media.name, Media.unix_name, Media.description, Media.created, Media.modified, 
          fn.COUNT(Case(Project.in_trash, (('0', 1),), None)).alias('in_project_count'),
          fn.COUNT(Case(Project.in_trash, (('1', 1),), None)).alias('in_project_trash_count'))
          .join(ProjectMedia, JOIN.LEFT_OUTER)  # Joins tweet -> favorite.
@@ -95,7 +95,7 @@ class CuemsDBMedia(StringSanitizer):
          .where(Media.in_trash==False)
          .group_by(Media.uuid))
         for media in medias:
-            media_dict = {str(media.uuid): {'name': media.name, 'unix_name': media.unix_name, 'created': media.created, 'modified': media.modified, "in_projects": media.in_project_count, "in_trash_projects" : media.in_project_trash_count} }
+            media_dict = {str(media.uuid): {'name': media.name, 'unix_name': media.unix_name, 'description': media.description, 'created': media.created, 'modified': media.modified, "in_projects": media.in_project_count, "in_trash_projects" : media.in_project_trash_count} }
             media_list.append(media_dict)
 
         return media_list
@@ -104,7 +104,7 @@ class CuemsDBMedia(StringSanitizer):
         media_list = list()
 
         medias = (Media
-         .select(Media.uuid, Media.name, Media.unix_name, Media.created, Media.modified, 
+         .select(Media.uuid, Media.name, Media.unix_name, Media.created, Media.modified, Media.description,
          fn.COUNT(Case(Project.in_trash, (('0', 1),), None)).alias('in_project_count'),
          fn.COUNT(Case(Project.in_trash, (('1', 1),), None)).alias('in_project_trash_count'))
          .join(ProjectMedia, JOIN.LEFT_OUTER)  # Joins tweet -> favorite.
@@ -112,7 +112,7 @@ class CuemsDBMedia(StringSanitizer):
          .where(Media.in_trash==True)
          .group_by(Media.uuid))
         for media in medias:
-            media_dict = {str(media.uuid): {'name': media.name, 'unix_name': media.unix_name, 'created': media.created, 'modified': media.modified, "in_projects": media.in_project_count, "in_trash_projects" : media.in_project_trash_count} }
+            media_dict = {str(media.uuid): {'name': media.name, 'unix_name': media.unix_name, 'description': media.description, 'created': media.created, 'modified': media.modified, "in_projects": media.in_project_count, "in_trash_projects" : media.in_project_trash_count} }
             media_list.append(media_dict)
 
         return media_list
@@ -122,7 +122,7 @@ class CuemsDBMedia(StringSanitizer):
             media = Media.get((Media.uuid==uuid) & (Media.in_trash == False))
             with self.db.atomic() as transaction:
                 try:
-                    media.update(name=data['uuid']['name'], modified=date_now_iso_utc()).execute()
+                    media.update(name=data['uuid']['name'], description=data['uuid']['description'], modified=date_now_iso_utc()).execute()
                     return 'updated'
                 except Exception as e:
                     logger.error("error: {} {} triying to update  media data, rolling back database update".format(type(e), e))
@@ -145,7 +145,7 @@ class CuemsDBMedia(StringSanitizer):
                 else:
                     project_trash_dict[str(project.uuid)] = project.unix_name
 
-            file_meta[uuid] = { 'name': media.name, 'unix_name': media.unix_name, 'created': media.created, 'modified': media.modified, 'in_trash': media.in_trash, 'in_projects' : project_dict, 'in_trash_projects' : project_trash_dict }
+            file_meta[uuid] = { 'name': media.name, 'unix_name': media.unix_name, 'description': media.description, 'created': media.created, 'modified': media.modified, 'in_trash': media.in_trash, 'in_projects' : project_dict, 'in_trash_projects' : project_trash_dict }
             return file_meta
             
         except DoesNotExist:
@@ -242,7 +242,7 @@ class CuemsDBProject(StringSanitizer):
         project_list = list()
         projects = Project.select().where(Project.in_trash == False)
         for project in projects:
-            project_dict = {str(project.uuid): {'name': project.name, 'unix_name': project.unix_name, 'created': project.created, 'modified': project.modified} }
+            project_dict = {str(project.uuid): {'name': project.name, 'unix_name': project.unix_name, 'description': project.description, 'created': project.created, 'modified': project.modified} }
             project_list.append(project_dict)
 
         return project_list
@@ -251,7 +251,7 @@ class CuemsDBProject(StringSanitizer):
         project_trash_list = list()
         projects_trash = Project.select().where(Project.in_trash == True)
         for project in projects_trash:
-            project_dict = {str(project.uuid): {'name': project.name, 'unix_name': project.unix_name, 'created': project.created, 'modified': project.modified} }
+            project_dict = {str(project.uuid): {'name': project.name, 'unix_name': project.unix_name, 'description': project.description, 'created': project.created, 'modified': project.modified} }
             project_trash_list.append(project_dict)
 
         return project_trash_list
@@ -265,6 +265,7 @@ class CuemsDBProject(StringSanitizer):
                     now = date_now_iso_utc()
                     data['CuemsScript']['modified'] = now
                     project.modified=now
+                    project.description=data['CuemsScript']['description']
                     project.save()
                     project_object = CuemsParser(data).parse()
                     self.update_media_relations(project, project_object, data)
@@ -291,7 +292,7 @@ class CuemsDBProject(StringSanitizer):
         data['CuemsScript']['modified'] = now
         with self.db.atomic() as transaction:
             try:
-                project = Project.create(uuid=project_uuid, unix_name=unix_name, name=data['CuemsScript']['name'], created=now, modified=now)
+                project = Project.create(uuid=project_uuid, unix_name=unix_name, name=data['CuemsScript']['name'], description=data['CuemsScript']['description'], created=now, modified=now)
                 os.mkdir(os.path.join(self.projects_path, unix_name))
                 project_object = CuemsParser(data).parse()
                 self.add_media_relations(project, project_object, data)

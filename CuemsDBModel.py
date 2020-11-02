@@ -3,7 +3,19 @@ import os
 
 from .CuemsUtils import date_now_iso_utc
 
-database = SqliteDatabase(None, pragmas={'foreign_keys': 1})
+database = SqliteDatabase(None, pragmas={
+    'foreign_keys': 1,
+    'ignore_check_constraints': 0})
+
+
+# TODO: discuss this; WAL mode is faster  but creates 3 files instead of 1, does not need synchonous=2 to mantain database integrity
+""" database = SqliteDatabase(None, pragmas={
+    'journal_mode': 'wal',
+    'cache_size': -1 * 4000,  # 4MB
+    'foreign_keys': 1,
+    'ignore_check_constraints': 0,
+    'synchronous': 1}) """
+
 
 class CuemsBaseModel(Model):
     class Meta:
@@ -13,13 +25,14 @@ class Project(CuemsBaseModel):
     uuid = UUIDField(index = True, unique = True, primary_key = True)
     name = CharField(unique = True)
     unix_name = CharField(unique = True)
+    description = TextField()
     created = DateTimeField(default=date_now_iso_utc())
     modified = DateTimeField(default=date_now_iso_utc())
     in_trash = BooleanField(default=False)
 
     @staticmethod
     def all_fields():
-        return [Project.uuid, Project.name, Project.unix_name, Project.created, Project.modified, Project.in_trash]
+        return [Project.uuid, Project.name, Project.unix_name, Project.description, Project.created, Project.modified, Project.in_trash]
 
 
     def medias(self):
@@ -37,13 +50,14 @@ class Media(CuemsBaseModel):
     uuid = UUIDField(index = True, unique = True, primary_key = True)
     name = CharField(unique = True)
     unix_name = CharField(unique = True)
+    description = TextField()
     created = DateTimeField(default=date_now_iso_utc())
     modified = DateTimeField(default=date_now_iso_utc())
     in_trash = BooleanField(default=False)
 
     @staticmethod
     def all_fields():
-        return [Media.uuid, Media.name, Media.unix_name, Media.created, Media.modified, Media.in_trash]
+        return [Media.uuid, Media.name, Media.unix_name, Media.description, Media.created, Media.modified, Media.in_trash]
 
     def projects(self):
         return (Project
