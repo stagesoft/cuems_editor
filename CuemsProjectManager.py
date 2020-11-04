@@ -298,10 +298,15 @@ class CuemsDBProject(StringSanitizer):
                 self.add_media_relations(project, project_object, data)
                 self.save_xml(unix_name, project_object)
                 return project_uuid
+            except IntegrityError as e:
+                transaction.rollback()
+                logger.error("error: {} {} ;triying to make new  project, rolling back database insert".format(type(e), e))
+                raise e
             except Exception as e:
+                transaction.rollback()
                 logger.error(traceback.format_exc()) # TODO: clean, only for debug
                 logger.error("error: {} {} ;triying to make new  project, rolling back database insert".format(type(e), e))
-                transaction.rollback()
+                
                 if os.path.exists(os.path.join(self.projects_path, unix_name)):
                     shutil.rmtree(os.path.join(self.projects_path, unix_name) )
                              
