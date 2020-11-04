@@ -51,10 +51,10 @@ class CuemsDBManager():
         database.connect()
         logger.debug(f'database connected {database}, {self.db_name}')
         for model in self.models:
-            if database.table_exists(model._meta.table):
+            if database.table_exists(model._meta.table): # pylint: disable=maybe-no-member
                 continue
             else:
-                logger.warning(f'table "{model._meta.table_name	}" does not exist, creating')
+                logger.warning(f'table "{model._meta.table_name	}" does not exist, creating') # pylint: disable=maybe-no-member
         # safe=True uses IF NOT EXIST on table create
         database.create_tables( self.models, safe=True) 
         self.project = CuemsDBProject(self.library_path, self.xsd_path, database)
@@ -87,7 +87,7 @@ class CuemsDBMedia(StringSanitizer):
         media_list = list()
 
         medias = (Media
-         .select(Media.uuid, Media.name, Media.unix_name, Media.description, Media.created, Media.modified, 
+         .select(Media.uuid, Media.name, Media.unix_name, Media.created, Media.modified, 
          fn.COUNT(Case(Project.in_trash, (('0', 1),), None)).alias('in_project_count'),
          fn.COUNT(Case(Project.in_trash, (('1', 1),), None)).alias('in_project_trash_count'))
          .join(ProjectMedia, JOIN.LEFT_OUTER)  # Joins tweet -> favorite.
@@ -95,7 +95,7 @@ class CuemsDBMedia(StringSanitizer):
          .where(Media.in_trash==False)
          .group_by(Media.uuid))
         for media in medias:
-            media_dict = {str(media.uuid): {'name': media.name, 'unix_name': media.unix_name, 'description': media.description, 'created': media.created, 'modified': media.modified, "in_projects": media.in_project_count, "in_trash_projects" : media.in_project_trash_count} }
+            media_dict = {str(media.uuid): {'name': media.name, 'unix_name': media.unix_name, 'created': media.created, 'modified': media.modified, "in_projects": media.in_project_count, "in_trash_projects" : media.in_project_trash_count} }
             media_list.append(media_dict)
 
         return media_list
@@ -104,7 +104,7 @@ class CuemsDBMedia(StringSanitizer):
         media_list = list()
 
         medias = (Media
-         .select(Media.uuid, Media.name, Media.unix_name, Media.created, Media.modified, Media.description,
+         .select(Media.uuid, Media.name, Media.unix_name, Media.created, Media.modified,
          fn.COUNT(Case(Project.in_trash, (('0', 1),), None)).alias('in_project_count'),
          fn.COUNT(Case(Project.in_trash, (('1', 1),), None)).alias('in_project_trash_count'))
          .join(ProjectMedia, JOIN.LEFT_OUTER)  # Joins tweet -> favorite.
@@ -112,7 +112,7 @@ class CuemsDBMedia(StringSanitizer):
          .where(Media.in_trash==True)
          .group_by(Media.uuid))
         for media in medias:
-            media_dict = {str(media.uuid): {'name': media.name, 'unix_name': media.unix_name, 'description': media.description, 'created': media.created, 'modified': media.modified, "in_projects": media.in_project_count, "in_trash_projects" : media.in_project_trash_count} }
+            media_dict = {str(media.uuid): {'name': media.name, 'unix_name': media.unix_name, 'created': media.created, 'modified': media.modified, "in_projects": media.in_project_count, "in_trash_projects" : media.in_project_trash_count} }
             media_list.append(media_dict)
 
         return media_list
@@ -122,7 +122,7 @@ class CuemsDBMedia(StringSanitizer):
             media = Media.get((Media.uuid==uuid) & (Media.in_trash == False))
             with self.db.atomic() as transaction:
                 try:
-                    media.update(name=data['uuid']['name'], description=data['uuid']['description'], modified=date_now_iso_utc()).execute()
+                    media.update(name=StringSanitizer.sanitize_name(data['uuid']['name']), description=StringSanitizer.sanitize_text_size(data['uuid']['description']), modified=date_now_iso_utc()).execute()
                     return 'updated'
                 except Exception as e:
                     logger.error("error: {} {} triying to update  media data, rolling back database update".format(type(e), e))
@@ -242,7 +242,7 @@ class CuemsDBProject(StringSanitizer):
         project_list = list()
         projects = Project.select().where(Project.in_trash == False)
         for project in projects:
-            project_dict = {str(project.uuid): {'name': project.name, 'unix_name': project.unix_name, 'description': project.description, 'created': project.created, 'modified': project.modified} }
+            project_dict = {str(project.uuid): {'name': project.name, 'unix_name': project.unix_name, 'created': project.created, 'modified': project.modified} }
             project_list.append(project_dict)
 
         return project_list
@@ -251,7 +251,7 @@ class CuemsDBProject(StringSanitizer):
         project_trash_list = list()
         projects_trash = Project.select().where(Project.in_trash == True)
         for project in projects_trash:
-            project_dict = {str(project.uuid): {'name': project.name, 'unix_name': project.unix_name, 'description': project.description, 'created': project.created, 'modified': project.modified} }
+            project_dict = {str(project.uuid): {'name': project.name, 'unix_name': project.unix_name, 'created': project.created, 'modified': project.modified} }
             project_trash_list.append(project_dict)
 
         return project_trash_list
@@ -261,11 +261,11 @@ class CuemsDBProject(StringSanitizer):
             project = Project.get((Project.uuid==uuid) & (Project.in_trash == False))
             with self.db.atomic() as transaction:
                 try:
-                    project.name=data['CuemsScript']['name']
+                    project.name=StringSanitizer.sanitize_name(data['CuemsScript']['name'])
                     now = date_now_iso_utc()
                     data['CuemsScript']['modified'] = now
                     project.modified=now
-                    project.description=data['CuemsScript']['description']
+                    project.description=StringSanitizer.sanitize_text_size(data['CuemsScript']['description'])
                     project.save()
                     project_object = CuemsParser(data).parse()
                     self.update_media_relations(project, project_object, data)
@@ -292,7 +292,7 @@ class CuemsDBProject(StringSanitizer):
         data['CuemsScript']['modified'] = now
         with self.db.atomic() as transaction:
             try:
-                project = Project.create(uuid=project_uuid, unix_name=unix_name, name=data['CuemsScript']['name'], description=data['CuemsScript']['description'], created=now, modified=now)
+                project = Project.create(uuid=project_uuid, unix_name=unix_name, name=StringSanitizer.sanitize_name(data['CuemsScript']['name']), description=StringSanitizer.sanitize_text_size(data['CuemsScript']['description']), created=now, modified=now)
                 os.mkdir(os.path.join(self.projects_path, unix_name))
                 project_object = CuemsParser(data).parse()
                 self.add_media_relations(project, project_object, data)
@@ -445,6 +445,15 @@ class CuemsDBProject(StringSanitizer):
     def load_xml(self, unix_name):
         reader = XmlReader(schema = self.xsd_path, xmlfile = (os.path.join(self.projects_path, unix_name, SCRIPT_FILE_NAME)))
         return reader.read()
+
+    def check_uuid_uniqueness(self, project_object):
+        uuid_list = []
+        uuid_list.append(project_object.uuid)
+
+        uuid_list.append(project_object.cuelist.uuid)
+
+            
+
         
 
 

@@ -25,7 +25,7 @@ class Project(CuemsBaseModel):
     uuid = UUIDField(index = True, unique = True, primary_key = True)
     name = CharField(unique = True)
     unix_name = CharField(unique = True)
-    description = TextField()
+    description = TextField(null = True) #TODO: define maxsize
     created = DateTimeField(default=date_now_iso_utc())
     modified = DateTimeField(default=date_now_iso_utc())
     in_trash = BooleanField(default=False)
@@ -50,7 +50,7 @@ class Media(CuemsBaseModel):
     uuid = UUIDField(index = True, unique = True, primary_key = True)
     name = CharField(unique = True)
     unix_name = CharField(unique = True)
-    description = TextField()
+    description = TextField(null = True) #TODO: define maxsize
     created = DateTimeField(default=date_now_iso_utc())
     modified = DateTimeField(default=date_now_iso_utc())
     in_trash = BooleanField(default=False)

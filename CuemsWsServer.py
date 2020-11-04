@@ -117,10 +117,11 @@ class CuemsWsServer():
             if self.users:
                 message = json.dumps({"type": "play_status", "value": item})
                 for user in self.users:
-                    print(f'user {id(user)} gets {item}')
+                    #print(f'user {id(user)} gets {item}')
                     await user.outgoing.put(message)
             else:
-                print(f'No user to  get {item}')
+                pass
+                #print(f'No user to  get {item}')
                     
 
     async def connection_handler(self, websocket, path):
@@ -393,6 +394,8 @@ class CuemsWsUser():
 
             try:
                 project_uuid = data['CuemsScript']['uuid']
+                if project_uuid in ('', 'null', None):
+                    new_project = True
             except KeyError:
                 new_project = True
 
@@ -442,7 +445,7 @@ class CuemsWsUser():
         try:
             logger.info("user {} duplicating project: {}".format(id(self.websocket), project_uuid))
             new_project_uuid = await self.server.event_loop.run_in_executor(self.server.executor, self.duplicate_project, project_uuid)
-            await self.notify_user(uuid=project_uuid, action=action, new_project_uuid=new_project_uuid)
+            await self.notify_user(uuid=project_uuid, action=action, new_uuid=new_project_uuid)
             await self.server.notify_others_list_changes(self, "project_list")
             await self.server.notify_others_list_changes(self, "file_list")
         except NonExistentItemError as e:
