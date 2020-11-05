@@ -51,10 +51,10 @@ class CuemsDBManager():
         database.connect()
         logger.debug(f'database connected {database}, {self.db_name}')
         for model in self.models:
-            if database.table_exists(model._meta.table):
+            if database.table_exists(model._meta.table): # pylint: disable=maybe-no-member
                 continue
             else:
-                logger.warning(f'table "{model._meta.table_name	}" does not exist, creating')
+                logger.warning(f'table "{model._meta.table_name	}" does not exist, creating') # pylint: disable=maybe-no-member
         # safe=True uses IF NOT EXIST on table create
         database.create_tables( self.models, safe=True) 
         self.project = CuemsDBProject(self.library_path, self.xsd_path, database)
@@ -104,7 +104,7 @@ class CuemsDBMedia(StringSanitizer):
         media_list = list()
 
         medias = (Media
-         .select(Media.uuid, Media.name, Media.unix_name, Media.created, Media.modified, 
+         .select(Media.uuid, Media.name, Media.unix_name, Media.created, Media.modified,
          fn.COUNT(Case(Project.in_trash, (('0', 1),), None)).alias('in_project_count'),
          fn.COUNT(Case(Project.in_trash, (('1', 1),), None)).alias('in_project_trash_count'))
          .join(ProjectMedia, JOIN.LEFT_OUTER)  # Joins tweet -> favorite.
@@ -122,7 +122,7 @@ class CuemsDBMedia(StringSanitizer):
             media = Media.get((Media.uuid==uuid) & (Media.in_trash == False))
             with self.db.atomic() as transaction:
                 try:
-                    media.update(name=data['uuid']['name'], modified=date_now_iso_utc()).execute()
+                    media.update(name=StringSanitizer.sanitize_name(data['uuid']['name']), description=StringSanitizer.sanitize_text_size(data['uuid']['description']), modified=date_now_iso_utc()).execute()
                     return 'updated'
                 except Exception as e:
                     logger.error("error: {} {} triying to update  media data, rolling back database update".format(type(e), e))
@@ -145,7 +145,7 @@ class CuemsDBMedia(StringSanitizer):
                 else:
                     project_trash_dict[str(project.uuid)] = project.unix_name
 
-            file_meta[uuid] = { 'name': media.name, 'unix_name': media.unix_name, 'created': media.created, 'modified': media.modified, 'in_trash': media.in_trash, 'in_projects' : project_dict, 'in_trash_projects' : project_trash_dict }
+            file_meta[uuid] = { 'name': media.name, 'unix_name': media.unix_name, 'description': media.description, 'created': media.created, 'modified': media.modified, 'in_trash': media.in_trash, 'in_projects' : project_dict, 'in_trash_projects' : project_trash_dict }
             return file_meta
             
         except DoesNotExist:
@@ -259,28 +259,37 @@ class CuemsDBProject(StringSanitizer):
     def update(self, uuid, data):   #TODO: check uuid format
         try:
             project = Project.get((Project.uuid==uuid) & (Project.in_trash == False))
-            with self.db.atomic() as transaction:
-                try:
-                    project.name=data['CuemsScript']['name']
-                    now = date_now_iso_utc()
-                    data['CuemsScript']['modified'] = now
-                    project.modified=now
-                    project.save()
-                    project_object = CuemsParser(data).parse()
-                    self.update_media_relations(project, project_object, data)
-                    self.save_xml(project.unix_name, project_object)
-                except Exception as e:
-                    logger.error(traceback.format_exc()) # TODO: clean, only for debug
-                    logger.error("error: {} {} triying to update  project, rolling back database update".format(type(e), e))
-                    transaction.rollback()
-                    raise e
-            
         except DoesNotExist:
             raise NonExistentItemError("item with uuid: {} does not exit".format(uuid))
+
+        try:
+            del data['CuemsScript']['unix_name']
+        except KeyError:
+            pass
+
+        with self.db.atomic() as transaction:
+            try:
+                project.name=StringSanitizer.sanitize_name(data['CuemsScript']['name'])
+                now = date_now_iso_utc()
+                data['CuemsScript']['modified'] = now
+                project.modified=now
+                project.description=StringSanitizer.sanitize_text_size(data['CuemsScript']['description'])
+                project.save()
+                project_object = CuemsParser(data).parse()
+                self.update_media_relations(project, project_object, data)
+                self.save_xml(project.unix_name, project_object)
+            except Exception as e:
+                logger.error(traceback.format_exc()) # TODO: clean, only for debug
+                logger.error("error: {} {} triying to update  project, rolling back database update".format(type(e), e))
+                transaction.rollback()
+                raise e
+            
+        
 
     def new(self, data):
         try:
             unix_name = StringSanitizer.sanitize_dir_permit_increment(data['CuemsScript']['unix_name'])
+            del data['CuemsScript']['unix_name']
         except KeyError as e:
             raise e
         
@@ -291,16 +300,21 @@ class CuemsDBProject(StringSanitizer):
         data['CuemsScript']['modified'] = now
         with self.db.atomic() as transaction:
             try:
-                project = Project.create(uuid=project_uuid, unix_name=unix_name, name=data['CuemsScript']['name'], created=now, modified=now)
+                project = Project.create(uuid=project_uuid, unix_name=unix_name, name=StringSanitizer.sanitize_name(data['CuemsScript']['name']), description=StringSanitizer.sanitize_text_size(data['CuemsScript']['description']), created=now, modified=now)
                 os.mkdir(os.path.join(self.projects_path, unix_name))
                 project_object = CuemsParser(data).parse()
                 self.add_media_relations(project, project_object, data)
                 self.save_xml(unix_name, project_object)
                 return project_uuid
+            except IntegrityError as e:
+                transaction.rollback()
+                logger.error("error: {} {} ;name or unix_name allready exists, rolling back database insert".format(type(e), e))
+                raise e
             except Exception as e:
+                transaction.rollback()
                 logger.error(traceback.format_exc()) # TODO: clean, only for debug
                 logger.error("error: {} {} ;triying to make new  project, rolling back database insert".format(type(e), e))
-                transaction.rollback()
+                
                 if os.path.exists(os.path.join(self.projects_path, unix_name)):
                     shutil.rmtree(os.path.join(self.projects_path, unix_name) )
                              
@@ -444,6 +458,15 @@ class CuemsDBProject(StringSanitizer):
     def load_xml(self, unix_name):
         reader = XmlReader(schema = self.xsd_path, xmlfile = (os.path.join(self.projects_path, unix_name, SCRIPT_FILE_NAME)))
         return reader.read()
+
+    def check_uuid_uniqueness(self, project_object):
+        uuid_list = []
+        uuid_list.append(project_object.uuid)
+
+        uuid_list.append(project_object.cuelist.uuid)
+
+            
+
         
 
 

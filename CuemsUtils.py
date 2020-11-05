@@ -9,27 +9,21 @@ from ..log import logger
 def date_now_iso_utc():
     return datetime.datetime.utcnow().isoformat()
 
-class CuemsUuid():
-    def __init__(self):
-        self.last_uuid = None
-
-    def ensure_unique_uuid(self):
-        if self.last_uuid is None:
-            return str(uuid_module.uuid1())
-        else:
-            while True:
-                new_uuid = str(uuid_module.uuid1())
-                if new_uuid != self.last_uuid:
-                    self.last_uuid = new_uuid
-                    return new_uuid
-                else:
-                    print('existing uuid, generating another one')
-                    continue
-
-def create_unique_uuid():
-    pass    
 
 class StringSanitizer():
+
+    @staticmethod
+    def sanitize_text_size(_string):
+        
+        if _string and (len(_string) > 65535):
+            _string = _string[0:65534] # return frist 255 characters
+        return _string
+
+    @staticmethod
+    def sanitize_name(_string): #TODO: scape characters?
+        if len(_string) > 255 :
+            _string = _string[0:254] # return frist 255 characters
+        return _string
     
     @staticmethod
     def sanitize_file_name(_string):
