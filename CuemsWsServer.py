@@ -670,8 +670,6 @@ class CuemsUpload(StringSanitizer):
             return False
         if data['action'] == 'upload':
             await self.set_upload(file_info=data["value"])
-        elif data['action'] == 'finished':
-            await self.upload_done(data["value"])
 
     async def set_upload(self, file_info):
         
@@ -707,7 +705,13 @@ class CuemsUpload(StringSanitizer):
                         self.bytes_received += len(message)
                         await self.message_sender(json.dumps({"ready" : True}))
                     else:
-                        await self.process_upload_message(message)
+                        data = json.loads(message)
+                        if 'action' not in data:
+                            return False
+                        if data['action'] == 'finished':
+                            await stream.flush()
+                            await stream.close()
+                            await self.upload_done(data["value"])
                         break
 
 
