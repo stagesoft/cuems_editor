@@ -730,10 +730,13 @@ class CuemsUpload(StringSanitizer):
             await self.message_sender(json.dumps({'error' : 'error saving file', 'fatal': True}))
 
     def check_file_integrity(self, path, original_md5):
+
+        hash_md5 = md5()
+        with open(path, "rb") as file_to_check:
+            for chunk in iter(lambda: file_to_check.read(65536), b""):
+                hash_md5.update(chunk)
         
-        with open(path, 'rb') as file_to_check:
-            data = file_to_check.read()    
-            returned_md5 = md5(data).hexdigest()
+        returned_md5 = hash_md5.hexdigest()
         if original_md5 != returned_md5:
             raise FileIntegrityError('MD5 mistmatch')
             
