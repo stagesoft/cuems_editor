@@ -330,6 +330,8 @@ class CuemsWsUser():
                     await self.received_file_data(data["value"], data["action"])
                 elif data["action"] == "file_load_meta":
                     await self.request_file_load_meta(data["value"], data["action"])
+                elif data["action"] == "file_load_thumbnail":
+                    await self.request_file_load_thumbnail(data["value"], data["action"])
                 elif data["action"] == "file_delete":
                     await self.request_delete_file(data["value"], data["action"])
                 elif data["action"] == "file_restore":
@@ -519,6 +521,20 @@ class CuemsWsUser():
             logger.error("error: {} {}".format(type(e), e))
             await self.notify_error_to_user(str(e), uuid=file_uuid, action=action)
 
+    async def request_file_load_thumbnail(self, file_uuid, action):
+        try:
+
+            logger.info("user {} loading file thumbnail {}".format(id(self.websocket), file_uuid))
+            
+            file_thumbnail = await self.server.event_loop.run_in_executor(self.server.executor, self.load_file_thumbnail, file_uuid)
+            await self.outgoing.put(file_thumbnail)
+        except NonExistentItemError as e:
+            logger.info(e)
+            await self.notify_error_to_user(str(e), uuid=file_uuid, action=action)
+        except Exception as e:
+            logger.error("error: {} {}".format(type(e), e))
+            await self.notify_error_to_user(str(e), uuid=file_uuid, action=action)
+
     async def list_file_trash(self, action):
         logger.info("user {} loading file trash list".format(id(self.websocket)))
         try:
@@ -610,8 +626,12 @@ class CuemsWsUser():
         return self.server.db.media.list()
 
     def load_file_meta(self, uuid):
-        logger.info("loading file list")
+        logger.info("loading file meta")
         return self.server.db.media.load_meta(uuid)
+        
+    def load_file_thumbnail(self, uuid):
+        logger.info("loading file thumbnail")
+        return self.server.db.media.load_thumbnail(uuid)
 
 
     def save_file(self, file_uuid, data):
