@@ -24,6 +24,7 @@ Commands 													 ->	Responses
 
 {"action" : "file_list"}  										->  {"type": "file_list", "value": "file_list_json"}
 {"action" : "file_load_meta", "value" : "file_uuid"}  			->  {"type": "file_load_meta", "value": "file_metadata_json"}
+{"action" : "file_load_thumbnail", "value" : "file_uuid"}  		->  { Binary Message }
 {"action" : "file_save", "value" : "file_json"}  				->  {"type": "file_save", "value": "file_uuid"}
 {"action" : "file_delete", "value" : "file_uuid"}  				->  {"type": "file_delete", "value": "file_uuid"}
 {"action" : "file_trash_list"}  								->  {"type": "file_trash_list", "value": "file_trash_list_json"}

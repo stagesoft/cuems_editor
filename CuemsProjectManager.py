@@ -5,6 +5,16 @@ import os
 import shutil
 import json
 import datetime
+import subprocess
+import re
+from random import randint
+from scipy.io import wavfile
+import numpy
+import matplotlib
+matplotlib.use('AGG')
+import matplotlib.pyplot as plt
+import io
+
 import traceback
 
 
@@ -40,6 +50,7 @@ class CuemsDBManager():
         try:
             self.library_path = settings_dict['library_path']
             self.db_name = settings_dict['database_name']
+            self.tmp_upload_path = settings_dict['tmp_upload_path']
         except KeyError as e:
             logger.error(f'can not read settings {e}')
             raise e
@@ -58,12 +69,13 @@ class CuemsDBManager():
         # safe=True uses IF NOT EXIST on table create
         database.create_tables( self.models, safe=True) 
         self.project = CuemsDBProject(self.library_path, self.xsd_path, database)
-        self.media = CuemsDBMedia(self.library_path, database)
+        self.media = CuemsDBMedia(self.library_path, self.tmp_upload_path, database)
 
 class CuemsDBMedia(StringSanitizer):
 
-    def __init__(self, library_path, db_connection):
+    def __init__(self, library_path, tmp_upload_path, db_connection):
         self.library_path = library_path
+        self.tmp_upload_path = tmp_upload_path
         self.db = db_connection
         self.media_path = os.path.join(self.library_path, MEDIA_FOLDER_NAME)
         self.trash_path = os.path.join(self.library_path, TRASH_FOLDER_NAME, MEDIA_FOLDER_NAME)
@@ -73,11 +85,25 @@ class CuemsDBMedia(StringSanitizer):
             try:
                 dest_filename = None
                 dest_filename = CopyMoveVersioned.move(tmp_file_path, self.media_path, filename)
-                Media.create(uuid=uuid_module.uuid1(), name=dest_filename, unix_name=dest_filename, created=date_now_iso_utc(), modified=date_now_iso_utc(), in_trash=False)
+
+                try:
+                    media_duration = self.get_duration(dest_filename)
+                except Exception as e:
+                    logger.warning(f'could not get media duration; error : {e}')
+                    media_duration = None
+
+                try:
+                    media_thumbnail_binary_data = self.create_thubnail(dest_filename, media_duration)
+                except Exception as e:
+                    logger.warning(f'could not generate thumbnail; error : {e}')
+                    media_thumbnail_binary_data = None
+
+                    
+                Media.create(uuid=uuid_module.uuid1(), name=dest_filename, unix_name=dest_filename, created=date_now_iso_utc(), modified=date_now_iso_utc(), duration=media_duration, thumbnail=media_thumbnail_binary_data, in_trash=False)
             except Exception as e:
                 logger.error("error: {} {} triying to move new file, rolling back database insert".format(type(e), e))
                 transaction.rollback()
-                if dest_filename is None:  # if move or copy where not sucessfull with dont need to clean and can end here forwarding the exception, else continue cleaning and then forward the exception
+                if dest_filename is None:  # if move or copy where not sucessfull we dont need to clean and can end here forwarding the exception, else continue cleaning and then forward the exception
                         raise e
                 if os.path.exists(os.path.join(self.media_path, dest_filename)):
                     os.remove(os.path.join(self.media_path, dest_filename))
@@ -145,8 +171,17 @@ class CuemsDBMedia(StringSanitizer):
                 else:
                     project_trash_dict[str(project.uuid)] = project.unix_name
 
-            file_meta[uuid] = { 'name': media.name, 'unix_name': media.unix_name, 'description': media.description, 'created': media.created, 'modified': media.modified, 'in_trash': media.in_trash, 'in_projects' : project_dict, 'in_trash_projects' : project_trash_dict }
+            file_meta[uuid] = { 'name': media.name, 'unix_name': media.unix_name, 'description': media.description, 'created': media.created, 'modified': media.modified,  'duration': media.duration, 'in_trash': media.in_trash, 'in_projects' : project_dict, 'in_trash_projects' : project_trash_dict }
             return file_meta
+            
+        except DoesNotExist:
+            raise NonExistentItemError("item with uuid: {} does not exit".format(uuid))
+
+    def load_thumbnail(self, uuid):
+        try:
+            media = Media.get(Media.uuid==uuid).thumbnail
+
+            return media
             
         except DoesNotExist:
             raise NonExistentItemError("item with uuid: {} does not exit".format(uuid))
@@ -218,6 +253,67 @@ class CuemsDBMedia(StringSanitizer):
         except DoesNotExist:
             raise NonExistentItemError("item with uuid: {} does not exit".format(uuid))
 
+    def get_duration(self, file):
+        # ffprobe -sexagesimal -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 audio.wav
+        timecode_pattern = r'^[\d]{1,2}:[\d]{2}:[\d]{2}\.[\d]{6}'
+        file_path = os.path.join(self.media_path, file)
+        result = subprocess.run(['ffprobe', '-sexagesimal', '-v', 'error', '-show_entries', 'format=duration', '-of', 'default=noprint_wrappers=1:nokey=1', file_path], stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        result_string = result.stdout.decode('utf8').strip()
+        duration_match = re.match(timecode_pattern, result_string)
+        if duration_match:
+            return duration_match.group()
+        else:
+            raise NotTimeCodeError('ffprobe output does not match timecode format')
+
+    def create_thubnail(self, file, duration):
+        # ffmpeg -y -hide_banner -loglevel warning -i input.mov -vf "scale=240:-1" -vframes 1 out.png
+        movie_list = ('.mov', '.avi', '.mkv', '.mpg', '.mp4')
+        audio_list = ('.aif', '.aiff', '.wav', '.mp3')
+        file_path = os.path.join(self.media_path, file)
+        thumbnail_path = os.path.join(self.tmp_upload_path, f'thumbnail{str(randint(100000, 999999))}.png') 
+        filename, file_extension = os.path.splitext(file)
+        timecode = 0 # TODO: select thumb timecode
+
+        if file_extension in movie_list:
+
+            result = subprocess.run(['ffmpeg', '-t', str(timecode), '-y', '-hide_banner', '-loglevel', 'warning', '-i', file_path, '-vf', 'scale=240:-1', '-vframes', '1', thumbnail_path], stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+            with open(thumbnail_path, 'rb') as file:
+                image_binary_data = file.read()
+            try: 
+                os.remove(thumbnail_path)
+            except Exception as e:
+                logger.debug(f'error triying to delete tmp video thumbnail. e: {e}')
+                
+            return image_binary_data
+
+        elif file_extension in audio_list:
+            #TODO: support 24-bit data
+            samplingFreq, mySound = wavfile.read(file_path)
+            mySoundDataType = mySound.dtype
+            mySound = mySound / (2.**15)
+            mySoundShape = mySound.shape
+            samplePoints = float(mySound.shape[0])
+            signalDuration =  mySound.shape[0] / samplingFreq
+            mySoundOneChannel = mySound[:,0]
+            timeArray = numpy.arange(0, samplePoints, 1)
+            timeArray = timeArray / samplingFreq
+            timeArray = timeArray * 1000
+
+            #Plot the tone
+
+            fig = plt.gcf()
+            fig.set_size_inches(2.4,1)
+            ax = plt.Axes(fig, [0., 0., 1., 1.])
+            ax.set_axis_off()
+            fig.add_axes(ax)
+            ax.plot(timeArray, mySoundOneChannel, color='blue', linewidth=0.1)
+
+            buffer = io.BytesIO()
+            fig.savefig(buffer, format='png')
+            fig.clear()
+            buffer.seek(0)
+
+            return buffer.read()
 
 class CuemsDBProject(StringSanitizer):
 

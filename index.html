@@ -374,6 +374,9 @@
     <div class="play_status">
     </div>
     <div class="buttons">
+        <img id="thumbnail"/>
+    </div>
+    <div class="buttons">
         <div class="minus button">-</div>
         <div class="" id="count">?</div>
         <div class="plus button">+</div>
@@ -479,93 +482,99 @@
             websocket.send(JSON.stringify({ action: 'project_save', value: JSON.parse(content.value) }));
         }
         websocket.onmessage = function (event) {
-            data = JSON.parse(event.data);
-            switch (data.type) {
-                case 'session_id':
-                    session_id.textContent = data.value;
-                    setCookie('session_id', data.value, 30)
-                    break;
-                case 'play_status':
-                    play_status.textContent = data.value;
-                    break;
-                case 'counter':
-                    value.textContent = data.value;
-                    break;
-                case 'users':
-                    users.textContent = (
-                        data.value.toString() + " user" +
-                        (data.value == 1 ? "" : "s"));
-                    break;
-                case "project_list":
-                    content.value = JSON.stringify(data.value);
-                    break;
-                case "file_list":
-                    content.value = JSON.stringify(data.value);
-                    break;
-                case "project_trash_list":
-                    content.value = JSON.stringify(data.value);
-                    break;
-                case "file_trash_list":
-                    content.value = JSON.stringify(data.value);
-                    break;
-                case 'project':
-                    content.value = JSON.stringify(data.value);
-                    break;
-                case 'file_load_meta':
-                    content.value = JSON.stringify(data.value);
-                    break;
-                case 'project_save':
-                    var element = document.createElement("div");
-                    element.appendChild(document.createTextNode("project " + JSON.stringify(data.value) + " saved"));
-                    notifications.appendChild(element);
-                    notifications.style.display = 'block';
-                    break;
-                case 'project_delete':
-                    var element = document.createElement("div");
-                    element.appendChild(document.createTextNode("project " + JSON.stringify(data.value) + " deleted"));
-                    notifications.appendChild(element);
-                    notifications.style.display = 'block';
-                    break;
-                case 'file_delete':
-                    var element = document.createElement("div");
-                    element.appendChild(document.createTextNode("file " + JSON.stringify(data.value) + " deleted"));
-                    notifications.appendChild(element);
-                    notifications.style.display = 'block';
-                    break;
-                case 'file_restore':
-                    var element = document.createElement("div");
-                    element.appendChild(document.createTextNode("file " + JSON.stringify(data.value) + " restored"));
-                    notifications.appendChild(element);
-                    notifications.style.display = 'block';
-                    break;
-                case 'project_restore':
-                    var element = document.createElement("div");
-                    element.appendChild(document.createTextNode("project " + JSON.stringify(data.value) + " restored"));
-                    notifications.appendChild(element);
-                    notifications.style.display = 'block';
-                    break;
-                case 'project_trash_delete':
-                    var element = document.createElement("div");
-                    element.appendChild(document.createTextNode("project " + JSON.stringify(data.value) + " deleted from trash"));
-                    notifications.appendChild(element);
-                    notifications.style.display = 'block';
-                    break;
-                case 'file_trash_delete':
-                    var element = document.createElement("div");
-                    element.appendChild(document.createTextNode("file " + JSON.stringify(data.value) + " deleted from trash"));
-                    notifications.appendChild(element);
-                    notifications.style.display = 'block';
-                    break;
-                case "state":
-                case "error":
-                    var element = document.createElement("div");
-                    element.appendChild(document.createTextNode(data.value));
-                    notifications.appendChild(element);
-                    notifications.style.display = 'block';
-                    break;
-                default:
-                    console.error(
-                        "unsupported event", data);
+            if (event.data instanceof Blob){
+                var objectURL = URL.createObjectURL(event.data);
+                document.querySelector("#thumbnail").src = objectURL;
+
+            } else {
+                data = JSON.parse(event.data);
+                switch (data.type) {
+                    case 'session_id':
+                        session_id.textContent = data.value;
+                        setCookie('session_id', data.value, 30)
+                        break;
+                    case 'play_status':
+                        play_status.textContent = data.value;
+                        break;
+                    case 'counter':
+                        value.textContent = data.value;
+                        break;
+                    case 'users':
+                        users.textContent = (
+                            data.value.toString() + " user" +
+                            (data.value == 1 ? "" : "s"));
+                        break;
+                    case "project_list":
+                        content.value = JSON.stringify(data.value);
+                        break;
+                    case "file_list":
+                        content.value = JSON.stringify(data.value);
+                        break;
+                    case "project_trash_list":
+                        content.value = JSON.stringify(data.value);
+                        break;
+                    case "file_trash_list":
+                        content.value = JSON.stringify(data.value);
+                        break;
+                    case 'project':
+                        content.value = JSON.stringify(data.value);
+                        break;
+                    case 'file_load_meta':
+                        content.value = JSON.stringify(data.value);
+                        break;
+                    case 'project_save':
+                        var element = document.createElement("div");
+                        element.appendChild(document.createTextNode("project " + JSON.stringify(data.value) + " saved"));
+                        notifications.appendChild(element);
+                        notifications.style.display = 'block';
+                        break;
+                    case 'project_delete':
+                        var element = document.createElement("div");
+                        element.appendChild(document.createTextNode("project " + JSON.stringify(data.value) + " deleted"));
+                        notifications.appendChild(element);
+                        notifications.style.display = 'block';
+                        break;
+                    case 'file_delete':
+                        var element = document.createElement("div");
+                        element.appendChild(document.createTextNode("file " + JSON.stringify(data.value) + " deleted"));
+                        notifications.appendChild(element);
+                        notifications.style.display = 'block';
+                        break;
+                    case 'file_restore':
+                        var element = document.createElement("div");
+                        element.appendChild(document.createTextNode("file " + JSON.stringify(data.value) + " restored"));
+                        notifications.appendChild(element);
+                        notifications.style.display = 'block';
+                        break;
+                    case 'project_restore':
+                        var element = document.createElement("div");
+                        element.appendChild(document.createTextNode("project " + JSON.stringify(data.value) + " restored"));
+                        notifications.appendChild(element);
+                        notifications.style.display = 'block';
+                        break;
+                    case 'project_trash_delete':
+                        var element = document.createElement("div");
+                        element.appendChild(document.createTextNode("project " + JSON.stringify(data.value) + " deleted from trash"));
+                        notifications.appendChild(element);
+                        notifications.style.display = 'block';
+                        break;
+                    case 'file_trash_delete':
+                        var element = document.createElement("div");
+                        element.appendChild(document.createTextNode("file " + JSON.stringify(data.value) + " deleted from trash"));
+                        notifications.appendChild(element);
+                        notifications.style.display = 'block';
+                        break;
+                    case "state":
+                    case "error":
+                        var element = document.createElement("div");
+                        element.appendChild(document.createTextNode(data.value));
+                        notifications.appendChild(element);
+                        notifications.style.display = 'block';
+                        break;
+                    default:
+                        console.error(
+                            "unsupported event", data);
+                }
             }
         };
 
