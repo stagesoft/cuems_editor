@@ -8,6 +8,7 @@ import datetime
 import subprocess
 import re
 from random import randint
+from enum import Enum
 from scipy.io import wavfile
 import numpy
 import matplotlib
@@ -25,6 +26,7 @@ from ..log import *
 from ..DictParser import CuemsParser # do not import Media (File class) TODO: change this? name conflict Media (DB model) and Media ( Cue class)
 from ..XmlBuilder import XmlBuilder
 from ..XmlReaderWriter import XmlReader, XmlWriter
+from ..CTimecode import CTimecode
 
 
 pewee_logger = logging.getLogger('peewee')
@@ -71,6 +73,11 @@ class CuemsDBManager():
         self.project = CuemsDBProject(self.library_path, self.xsd_path, database)
         self.media = CuemsDBMedia(self.library_path, self.tmp_upload_path, database)
 
+class MediaType(Enum):
+    MOVIE = 'movie'
+    AUDIO = 'audio'
+    IMAGE = 'image'
+
 class CuemsDBMedia(StringSanitizer):
 
     def __init__(self, library_path, tmp_upload_path, db_connection):
@@ -85,21 +92,36 @@ class CuemsDBMedia(StringSanitizer):
             try:
                 dest_filename = None
                 dest_filename = CopyMoveVersioned.move(tmp_file_path, self.media_path, filename)
+                
+                try:
+                    _type = self.get_type(dest_filename)
+                except Exception as e:
+                    logger.warning(f'could not get media type; error : {e}')
+                    _type = None
+                    raise e
 
                 try:
-                    media_duration = self.get_duration(dest_filename)
+                    if _type in (MediaType.MOVIE, MediaType.AUDIO):
+                        media_duration = self.get_duration(dest_filename)
+                    else:
+                        media_duration = None
                 except Exception as e:
                     logger.warning(f'could not get media duration; error : {e}')
                     media_duration = None
 
                 try:
-                    media_thumbnail_binary_data = self.create_thubnail(dest_filename, media_duration)
+                    if _type is MediaType.MOVIE:
+                        media_thumbnail_binary_data = self.create_video_thubnail(dest_filename, media_duration)
+                    elif _type is MediaType.AUDIO:
+                        media_thumbnail_binary_data = self.create_audio_thubnail(dest_filename, media_duration)
+                    elif _type is MediaType.IMAGE:
+                        media_thumbnail_binary_data = self.create_video_thubnail(dest_filename, None)
                 except Exception as e:
-                    logger.warning(f'could not generate thumbnail; error : {e}')
+                    logger.warning(f'could not generate {_type} thumbnail; error : {e}')
                     media_thumbnail_binary_data = None
 
                     
-                Media.create(uuid=uuid_module.uuid1(), name=dest_filename, unix_name=dest_filename, created=date_now_iso_utc(), modified=date_now_iso_utc(), duration=media_duration, thumbnail=media_thumbnail_binary_data, in_trash=False)
+                Media.create(uuid=uuid_module.uuid1(), name=dest_filename, unix_name=dest_filename, created=date_now_iso_utc(), modified=date_now_iso_utc(), duration=media_duration, thumbnail=media_thumbnail_binary_data, media_type=_type.value, in_trash=False)
             except Exception as e:
                 logger.error("error: {} {} triying to move new file, rolling back database insert".format(type(e), e))
                 transaction.rollback()
@@ -113,7 +135,7 @@ class CuemsDBMedia(StringSanitizer):
         media_list = list()
 
         medias = (Media
-         .select(Media.uuid, Media.name, Media.unix_name, Media.created, Media.modified, 
+         .select(Media.uuid, Media.name, Media.unix_name, Media.created, Media.modified, Media.media_type,
          fn.COUNT(Case(Project.in_trash, (('0', 1),), None)).alias('in_project_count'),
          fn.COUNT(Case(Project.in_trash, (('1', 1),), None)).alias('in_project_trash_count'))
          .join(ProjectMedia, JOIN.LEFT_OUTER)  # Joins tweet -> favorite.
@@ -121,7 +143,7 @@ class CuemsDBMedia(StringSanitizer):
          .where(Media.in_trash==False)
          .group_by(Media.uuid))
         for media in medias:
-            media_dict = {str(media.uuid): {'name': media.name, 'unix_name': media.unix_name, 'created': media.created, 'modified': media.modified, "in_projects": media.in_project_count, "in_trash_projects" : media.in_project_trash_count} }
+            media_dict = {str(media.uuid): {'name': media.name, 'unix_name': media.unix_name, 'created': media.created, 'modified': media.modified,  'type': media.media_type, "in_projects": media.in_project_count, "in_trash_projects" : media.in_project_trash_count} }
             media_list.append(media_dict)
 
         return media_list
@@ -162,16 +184,16 @@ class CuemsDBMedia(StringSanitizer):
         try:
             media = Media.get(Media.uuid==uuid)
             file_meta = dict()
-            project_dict = dict()
-            project_trash_dict = dict()
+            project_list = list()
+            project_trash_list = list()
             media_projects_query = media.projects()
             for project in media_projects_query:
                 if project.in_trash == False :
-                    project_dict[str(project.uuid)] = project.unix_name
+                    project_list.append(str(project.uuid))
                 else:
-                    project_trash_dict[str(project.uuid)] = project.unix_name
+                    project_trash_list.append(str(project.uuid))
 
-            file_meta[uuid] = { 'name': media.name, 'unix_name': media.unix_name, 'description': media.description, 'created': media.created, 'modified': media.modified,  'duration': media.duration, 'in_trash': media.in_trash, 'in_projects' : project_dict, 'in_trash_projects' : project_trash_dict }
+            file_meta[uuid] = { 'name': media.name, 'unix_name': media.unix_name, 'description': media.description, 'created': media.created, 'modified': media.modified,  'duration': media.duration, 'type': media.media_type, 'in_trash': media.in_trash, 'in_projects' : project_list, 'in_trash_projects' : project_trash_list }
             return file_meta
             
         except DoesNotExist:
@@ -253,67 +275,98 @@ class CuemsDBMedia(StringSanitizer):
         except DoesNotExist:
             raise NonExistentItemError("item with uuid: {} does not exit".format(uuid))
 
-    def get_duration(self, file):
+    def get_type(self, filename):
+        movie_list = ('.mov', '.avi', '.mkv', '.mpg', '.mp4')
+        audio_list = ('.aif', '.aiff', '.wav', '.mp3')
+        image_list = ('.png', '.jpg', '.tga')
+        name_root, file_extension = os.path.splitext(filename)
+        _type = None
+
+        if file_extension in movie_list:
+            _type = MediaType.MOVIE
+        elif file_extension in audio_list:
+            _type = MediaType.AUDIO
+        elif file_extension in image_list:
+            _type = MediaType.IMAGE
+
+        return _type
+
+
+    def get_duration(self, filename):
         # ffprobe -sexagesimal -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 audio.wav
-        timecode_pattern = r'^[\d]{1,2}:[\d]{2}:[\d]{2}\.[\d]{6}'
-        file_path = os.path.join(self.media_path, file)
+        timecode_pattern = r'^([\d]{1,2}:[\d]{2}:[\d]{2})(\.[\d]{6})'
+        file_path = os.path.join(self.media_path, filename)
         result = subprocess.run(['ffprobe', '-sexagesimal', '-v', 'error', '-show_entries', 'format=duration', '-of', 'default=noprint_wrappers=1:nokey=1', file_path], stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
         result_string = result.stdout.decode('utf8').strip()
         duration_match = re.match(timecode_pattern, result_string)
         if duration_match:
-            return duration_match.group()
+            # TODO: remove this ugly hack and let CTimecode handle extra digits
+            millis = duration_match.group(2)
+            millis = round(float(millis), 3)
+            if str(millis)[0:1] == '1':
+                millis = '0.9'
+            else:
+                millis = str(millis)[1:]
+            duration = CTimecode(f'{duration_match.group(1)}{millis}')
+            # when CTimecode works let this handle extra digits
+            #duration = CTimecode(duration_match.group())
+            return duration
         else:
             raise NotTimeCodeError('ffprobe output does not match timecode format')
 
-    def create_thubnail(self, file, duration):
+    def create_video_thubnail(self, filename, duration):
         # ffmpeg -y -hide_banner -loglevel warning -i input.mov -vf "scale=240:-1" -vframes 1 out.png
-        movie_list = ('.mov', '.avi', '.mkv', '.mpg', '.mp4')
-        audio_list = ('.aif', '.aiff', '.wav', '.mp3')
-        file_path = os.path.join(self.media_path, file)
-        thumbnail_path = os.path.join(self.tmp_upload_path, f'thumbnail{str(randint(100000, 999999))}.png') 
-        filename, file_extension = os.path.splitext(file)
-        timecode = 0 # TODO: select thumb timecode
+        file_path = os.path.join(self.media_path, filename)
+        thumbnail_path = os.path.join(self.tmp_upload_path, f'thumbnail{str(randint(100000, 999999))}.png')
+        if duration is None:
+            result = subprocess.run(['ffmpeg', '-y', '-hide_banner', '-loglevel', 'warning', '-i', file_path, '-vf', 'scale=240:-1', '-vframes', '1', thumbnail_path], stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        else:
+            time_option = "-ss"
+            timecode = duration / 4
+            timecode = f'{timecode.milliseconds}ms'
+            result = subprocess.run(['ffmpeg', time_option, timecode, '-y', '-hide_banner', '-loglevel', 'warning', '-i', file_path, '-vf', 'scale=240:-1', '-vframes', '1', thumbnail_path], stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
 
-        if file_extension in movie_list:
+        with open(thumbnail_path, 'rb') as file:
+            image_binary_data = file.read()
+        try: 
+            os.remove(thumbnail_path)
+        except Exception as e:
+            logger.debug(f'error triying to delete tmp video thumbnail. e: {e}')
+            
+        return image_binary_data
 
-            result = subprocess.run(['ffmpeg', '-t', str(timecode), '-y', '-hide_banner', '-loglevel', 'warning', '-i', file_path, '-vf', 'scale=240:-1', '-vframes', '1', thumbnail_path], stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-            with open(thumbnail_path, 'rb') as file:
-                image_binary_data = file.read()
-            try: 
-                os.remove(thumbnail_path)
-            except Exception as e:
-                logger.debug(f'error triying to delete tmp video thumbnail. e: {e}')
-                
-            return image_binary_data
 
-        elif file_extension in audio_list:
-            #TODO: support 24-bit data
-            samplingFreq, mySound = wavfile.read(file_path)
-            mySoundDataType = mySound.dtype
-            mySound = mySound / (2.**15)
-            mySoundShape = mySound.shape
-            samplePoints = float(mySound.shape[0])
-            signalDuration =  mySound.shape[0] / samplingFreq
-            mySoundOneChannel = mySound[:,0]
-            timeArray = numpy.arange(0, samplePoints, 1)
-            timeArray = timeArray / samplingFreq
-            timeArray = timeArray * 1000
 
-            #Plot the tone
+    def create_audio_thubnail(self, filename, duration):
 
-            fig = plt.gcf()
-            fig.set_size_inches(2.4,1)
-            ax = plt.Axes(fig, [0., 0., 1., 1.])
-            ax.set_axis_off()
-            fig.add_axes(ax)
-            ax.plot(timeArray, mySoundOneChannel, color='blue', linewidth=0.1)
+        file_path = os.path.join(self.media_path, filename)
+        #TODO: support 24-bit data
+        samplingFreq, mySound = wavfile.read(file_path)
+        mySoundDataType = mySound.dtype
+        mySound = mySound / (2.**15)
+        mySoundShape = mySound.shape
+        samplePoints = float(mySound.shape[0])
+        signalDuration =  mySound.shape[0] / samplingFreq
+        mySoundOneChannel = mySound[:,0]
+        timeArray = numpy.arange(0, samplePoints, 1)
+        timeArray = timeArray / samplingFreq
+        timeArray = timeArray * 1000
 
-            buffer = io.BytesIO()
-            fig.savefig(buffer, format='png')
-            fig.clear()
-            buffer.seek(0)
+        #Plot the tone
 
-            return buffer.read()
+        fig = plt.gcf()
+        fig.set_size_inches(2.4,1)
+        ax = plt.Axes(fig, [0., 0., 1., 1.])
+        ax.set_axis_off()
+        fig.add_axes(ax)
+        ax.plot(timeArray, mySoundOneChannel, color='blue', linewidth=0.1)
+
+        buffer = io.BytesIO()
+        fig.savefig(buffer, format='png')
+        fig.clear()
+        buffer.seek(0)
+
+        return buffer.read()
 
 class CuemsDBProject(StringSanitizer):
 
