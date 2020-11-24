@@ -202,8 +202,10 @@ class CuemsDBMedia(StringSanitizer):
     def load_thumbnail(self, uuid):
         try:
             media = Media.get(Media.uuid==uuid).thumbnail
-
+            if  not media:
+                raise NonExistentItemError("item with uuid: {} has no media".format(uuid))
             return media
+                
             
         except DoesNotExist:
             raise NonExistentItemError("item with uuid: {} does not exit".format(uuid))
