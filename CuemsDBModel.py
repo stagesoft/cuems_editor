@@ -54,13 +54,12 @@ class Media(CuemsBaseModel):
     created = DateTimeField(default=date_now_iso_utc())
     modified = DateTimeField(default=date_now_iso_utc())
     duration = CharField(null = True)
-    thumbnail = BlobField(null = True)
     media_type = CharField()
     in_trash = BooleanField(default=False)
 
     @staticmethod
     def all_fields():
-        return [Media.uuid, Media.name, Media.unix_name, Media.description, Media.created, Media.modified, Media.duration, Media.thumbnail, Media.media_type, Media.in_trash]
+        return [Media.uuid, Media.name, Media.unix_name, Media.description, Media.created, Media.modified, Media.duration, Media.media_type, Media.in_trash]
 
     def projects(self):
         return (Project

@@ -57,8 +57,11 @@ class StringSanitizer():
 class CopyMoveVersioned():
 
     @staticmethod
-    def move(orig_path, dest_path, dest_filename):
+    def move(orig_path, dest_path, dest_filename=None):
         i = 0
+        if dest_filename is None:
+            dest_filename = os.path.basename(orig_path)
+            
         (base, ext) = os.path.splitext(dest_filename)
         
         while True:     

@@ -527,7 +527,7 @@ class CuemsWsUser():
             logger.info("user {} loading file thumbnail {}".format(id(self.websocket), file_uuid))
             
             file_thumbnail = await self.server.event_loop.run_in_executor(self.server.executor, self.load_file_thumbnail, file_uuid)
-            await self.outgoing.put(file_thumbnail)
+            await self.outgoing.put(file_thumbnail) #TODO: add uuid encoded in the binary message
         except NonExistentItemError as e:
             logger.info(e)
             await self.notify_error_to_user(str(e), uuid=file_uuid, action=action)
