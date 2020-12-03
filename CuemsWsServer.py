@@ -332,6 +332,8 @@ class CuemsWsUser():
                     await self.request_file_load_meta(data["value"], data["action"])
                 elif data["action"] == "file_load_thumbnail":
                     await self.request_file_load_thumbnail(data["value"], data["action"])
+                elif data["action"] == "file_load_waveform":
+                    await self.request_file_load_waveform(data["value"], data["action"])
                 elif data["action"] == "file_delete":
                     await self.request_delete_file(data["value"], data["action"])
                 elif data["action"] == "file_restore":
@@ -529,7 +531,21 @@ class CuemsWsUser():
             file_thumbnail = await self.server.event_loop.run_in_executor(self.server.executor, self.load_file_thumbnail, file_uuid)
             await self.outgoing.put(file_thumbnail) #TODO: add uuid encoded in the binary message
         except NonExistentItemError as e:
-            logger.info(e)
+            logger.warning(e)
+            await self.notify_error_to_user(str(e), uuid=file_uuid, action=action)
+        except Exception as e:
+            logger.error("error: {} {}".format(type(e), e))
+            await self.notify_error_to_user(str(e), uuid=file_uuid, action=action)
+
+    async def request_file_load_waveform(self, file_uuid, action):
+        try:
+
+            logger.info("user {} loading file waveform {}".format(id(self.websocket), file_uuid))
+            
+            file_waveform = await self.server.event_loop.run_in_executor(self.server.executor, self.load_file_waveform, file_uuid)
+            await self.outgoing.put(file_waveform) #TODO: add uuid encoded in the binary message
+        except NonExistentItemError as e:
+            logger.warning(e)
             await self.notify_error_to_user(str(e), uuid=file_uuid, action=action)
         except Exception as e:
             logger.error("error: {} {}".format(type(e), e))
@@ -632,6 +648,10 @@ class CuemsWsUser():
     def load_file_thumbnail(self, uuid):
         logger.info("loading file thumbnail")
         return self.server.db.media.load_thumbnail(uuid)
+
+    def load_file_waveform(self, uuid):
+        logger.info("loading file waveform")
+        return self.server.db.media.load_waveform(uuid)
 
 
     def save_file(self, file_uuid, data):

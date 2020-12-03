@@ -17,18 +17,20 @@ Commands 													 ->	Responses
 {"action" : "project_save", "value" : "project_json"}   		->  {"type": "project_save", "value": "project_uuid"}
 {"action" : "project_delete", "value" : "project_uuid"} 		->  {"type": "project_delete", "value": "project_uuid"}
 {"action" : "project_trash_list"}  							 	->  {"type": "project_trash_list", "value": "project_trash_list_json"}
-{"action" : "project_recover", "value" : "project_uuid"}  		->  {"type": "project_recover", "value": "project_uuid"}
+{"action" : "project_restore", "value" : "project_uuid"}  		->  {"type": "project_recover", "value": "project_uuid"}
 {"action" : "project_trash_delete", "value" : "project_uuid"}	->  {"type": "project_trash_delete", "value": "project_uuid"}
 {"action" : "project_duplicate", "value" : "project_uuid"}		->  {"type": "project_duplicate", "value": {"uuid": "project_uuid", "new_uuid": "duplicated_project_uuid" }
 
 
 {"action" : "file_list"}  										->  {"type": "file_list", "value": "file_list_json"}
 {"action" : "file_load_meta", "value" : "file_uuid"}  			->  {"type": "file_load_meta", "value": "file_metadata_json"}
+{"action" : "file_load", "value" : "file_uuid"}  				->  { Binary Message }
 {"action" : "file_load_thumbnail", "value" : "file_uuid"}  		->  { Binary Message }
+{"action" : "file_load_waveform", "value" : "file_uuid"}  		->  { Binary Message }
 {"action" : "file_save", "value" : "file_json"}  				->  {"type": "file_save", "value": "file_uuid"}
 {"action" : "file_delete", "value" : "file_uuid"}  				->  {"type": "file_delete", "value": "file_uuid"}
 {"action" : "file_trash_list"}  								->  {"type": "file_trash_list", "value": "file_trash_list_json"}
-{"action" : "file_recover", "value" : "file_uuid"}  			->  {"type": "file_recover", "value": "file_uuid"}
+{"action" : "file_restore", "value" : "file_uuid"}  			->  {"type": "file_recover", "value": "file_uuid"}
 {"action" : "file_trash_delete", "value" : "file_uuid"}			->  {"type": "file_trash_delete", "value": "file_uuid"}
 
 
@@ -40,7 +42,7 @@ Error responses
 				->	{"type": "error", "action": "project_save", "uuid": "project_uuid", value": "error_msg"}
 				->	{"type": "error", "action": "project_delete", "uuid": "project_uuid", value": "error_msg"}
 				->	{"type": "error", "action": "project_trash_list", "value": "error_msg"}
-				->	{"type": "error", "action": "project_trash_recover", "uuid" : "project_uuid", "value": "error_msg"}
+				->	{"type": "error", "action": "project_restore", "uuid" : "project_uuid", "value": "error_msg"}
 				->	{"type": "error", "action": "project_trash_delete", "uuid" : "project_uuid", "value": "error_msg"}
 
 														
@@ -49,7 +51,7 @@ Error responses
 				->	{"type": "error", "action": "file_save", "uuid": "project_uuid", value": "error_msg"}
 				->	{"type": "error", "action": "file_delete", "uuid": "project_uuid", value": "error_msg"}
 				->	{"type": "error", "action": "file_trash_list", "value": "error_msg"}
-				->	{"type": "error", "action": "file_trash_recover", "uuid" : "file_uuid", "value": "error_msg"}
+				->	{"type": "error", "action": "file_restore", "uuid" : "file_uuid", "value": "error_msg"}
 				->	{"type": "error", "action": "file_trash_delete", "uuid" : "file_uuid", "value": "error_msg"}
 
 				->  {"type": "error", "value": "unsupported event: event"}
