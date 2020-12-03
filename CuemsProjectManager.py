@@ -8,7 +8,7 @@ import datetime
 import subprocess
 import re
 from random import randint
-from enum import Enum
+from enum import Enum, auto
 
 import traceback
 
@@ -74,9 +74,9 @@ class CuemsDBManager():
         self.media = CuemsDBMedia(self.library_path, self.tmp_upload_path, database)
 
 class MediaType(Enum):
-    MOVIE = 'movie'
-    AUDIO = 'audio'
-    IMAGE = 'image'
+    MOVIE = auto()
+    AUDIO = auto()
+    IMAGE = auto()
 
 class CuemsDBMedia(StringSanitizer):
 
@@ -93,6 +93,7 @@ class CuemsDBMedia(StringSanitizer):
 
     def new(self, tmp_file_path, filename):
         with self.db.atomic() as transaction:
+            trash_state = False
             try:
                 dest_filename = None
                 dest_filename = CopyMoveVersioned.move(tmp_file_path, self.media_path, filename)
@@ -115,25 +116,40 @@ class CuemsDBMedia(StringSanitizer):
 
                 try:
                     if _type is MediaType.MOVIE:
-                        self.create_video_thubnail(dest_filename, media_duration)
+                        dest_thumbnail_filename = None
+                        dest_thumbnail_filename = self.create_video_thubnail(dest_filename, media_duration)
                     elif _type is MediaType.AUDIO:
-                        self.create_audio_thubnail(dest_filename, media_duration)
-                        self.create_audio_waveform(dest_filename)
+                        dest_thumbnail_filename = None
+                        dest_waveform_filename = None
+                        dest_thumbnail_filename = self.create_audio_thubnail(dest_filename, media_duration)
+                        dest_waveform_filename = self.create_audio_waveform(dest_filename)
                     elif _type is MediaType.IMAGE:
-                        self.create_video_thubnail(dest_filename, None)
+                        dest_thumbnail_filename = None
+                        dest_thumbnail_filename = self.create_video_thubnail(dest_filename, None)
                 except Exception as e:
                     logger.warning(f'could not generate {_type} thumbnail or waveform; error : {e}')
                     media_thumbnail_binary_data = None
 
                     
-                Media.create(uuid=uuid_module.uuid1(), name=dest_filename, unix_name=dest_filename, created=date_now_iso_utc(), modified=date_now_iso_utc(), duration=media_duration, media_type=_type.value, in_trash=False)
+                Media.create(uuid=uuid_module.uuid1(), name=dest_filename, unix_name=dest_filename, created=date_now_iso_utc(), modified=date_now_iso_utc(), duration=media_duration, media_type=_type.name, in_trash=False)
             except Exception as e:
                 logger.error("error: {} {} triying to move new file, rolling back database insert".format(type(e), e))
                 transaction.rollback()
-                if dest_filename is None:  # if move or copy where not sucessfull we dont need to clean and can end here forwarding the exception, else continue cleaning and then forward the exception
+                if dest_filename is None and dest_thumbnail_filename is None:  # if move or copy where not sucessfull we dont need to clean and can end here forwarding the exception, else continue cleaning and then forward the exception
+                    if _type is MediaType.AUDIO:
+                        if dest_waveform_filename is None:
+                            raise e
+                    else:
                         raise e
-                if os.path.exists(os.path.join(self.media_path, dest_filename)):
-                    os.remove(os.path.join(self.media_path, dest_filename))
+                if os.path.exists(self.get_file_path(dest_filename)):
+                    os.remove(self.get_file_path(dest_filename))
+
+                if os.path.exists(self.get_thumbnail_path(dest_filename)):
+                    os.remove(self.get_thumbnail_path(dest_filename))
+
+                if os.path.exists(self.get_waveform_path(dest_filename)):
+                    os.remove(self.get_waveform_path(dest_filename))
+
                 raise e
 
     def list(self):
@@ -208,22 +224,35 @@ class CuemsDBMedia(StringSanitizer):
         try:
             media_filename = Media.get(Media.uuid==uuid).unix_name
             thumbnail_file_path = self.get_thumbnail_path(media_filename)
-            
-            with open(thumbnail_file_path, 'rb') as file:
-                media_thumbnail_binary_data = file.read()
-                
-            if not media_thumbnail_binary_data:
+            try:
+                with open(thumbnail_file_path, 'rb') as file:
+                    media_thumbnail_binary_data = file.read()
+                return media_thumbnail_binary_data
+            except Exception as e:
                 raise NonExistentItemError("item with uuid: {} has no thumbnail".format(uuid))
-            return media_thumbnail_binary_data
-                
             
+        except DoesNotExist:
+            raise NonExistentItemError("item with uuid: {} does not exit".format(uuid))
+
+    def load_waveform(self, uuid):
+        try:
+            media_filename = Media.get(Media.uuid==uuid).unix_name
+            waveform_file_path = self.get_waveform_path(media_filename)
+            try:
+                with open(waveform_file_path, 'rb') as file:
+                    media_waveform_binary_data = file.read()
+                return media_waveform_binary_data
+            except Exception as e:
+                raise NonExistentItemError("item with uuid: {} has no waveform".format(uuid))
+
         except DoesNotExist:
             raise NonExistentItemError("item with uuid: {} does not exit".format(uuid))
 
         
     def delete(self, uuid):
         try:
-            media = Media.get((Media.uuid==uuid) & (Media.in_trash == False))
+            trash_state = False
+            media = Media.get((Media.uuid==uuid) & (Media.in_trash == trash_state))
         
             with self.db.atomic() as transaction:
                 try:
@@ -239,8 +268,7 @@ class CuemsDBMedia(StringSanitizer):
                         logger.error("error: {} {}; triying to move thumbnail to trash".format(type(e), e))
                         raise e
 
-                    if media.media_type is MediaType.AUDIO:
-                        print("type is audio")
+                    if self.is_audio(media):
                         dest_waveform_filename = None
                         file_waveform_path = self.get_waveform_path(media.unix_name)
                         try:
@@ -253,13 +281,13 @@ class CuemsDBMedia(StringSanitizer):
                     dest_filename = CopyMoveVersioned.move(file_path, self.trash_path)
                     media.in_trash = True
                     media.save()
-                    logger.debug('deleting instance from table: {}'.format(media))
+                    logger.debug('modifing instance in table: {}'.format(media))
                 except Exception as e:
                     logger.error("error: {} {}; triying to move file to trash, rolling back database".format(type(e), e))
                     transaction.rollback()
                     # if move or copy where not sucessfull we don't need to clean and can end here forwarding the exception, else continue cleaning and then forward the exception
                     if dest_filename is None & dest_thumbnail_filename is None:
-                        if media.media_type is MediaType.AUDIO:
+                        if self.is_audio(media):
                             if dest_waveform_filename is None:
                                 raise e
                         else:
@@ -267,15 +295,15 @@ class CuemsDBMedia(StringSanitizer):
 
                     # check if any file has been moved to trash folder and return it to media folder's
                     logger.debug("moving files back to media folder")
-                    if os.path.exists(self.get_file_trash_path(dest_filename)):
-                        shutil.move(self.get_file_trash_path(dest_filename), self.get_file_path(media.unix_name))
+                    if os.path.exists(self.get_file_path(dest_filename, trash_state=True)):
+                        shutil.move(self.get_file_path(dest_filename, trash_state=True), self.get_file_path(media.unix_name))
 
-                    if os.path.exists(self.get_thumbnail_trash_path(dest_thumbnail_filename)):
-                        shutil.move(self.get_thumbnail_trash_path(dest_thumbnail_filename), self.get_thumbnail_path(media.unix_name))
+                    if os.path.exists(self.get_thumbnail_path(dest_thumbnail_filename, trash_state=True)):
+                        shutil.move(self.get_thumbnail_path(dest_thumbnail_filename, trash_state=True), self.get_thumbnail_path(media.unix_name))
 
-                    if media.media_type is MediaType.AUDIO:
-                        if os.path.exists(self.get_waveform_trash_path(dest_waveform_filename)):
-                            shutil.move(self.get_waveform_trash_path(dest_waveform_filename), self.get_waveform_path(media.unix_name))
+                    if self.is_audio(media):
+                        if os.path.exists(self.get_waveform_path(dest_waveform_filename, trash_state=True)):
+                            shutil.move(self.get_waveform_path(dest_waveform_filename, trash_state=True), self.get_waveform_path(media.unix_name))
 
                     raise e
 
@@ -284,14 +312,15 @@ class CuemsDBMedia(StringSanitizer):
 
     def restore(self, uuid):
         try:
-            media_trash = Media.get((Media.uuid==uuid) & (Media.in_trash == True))
+            trash_state = True
+            media_trash = Media.get((Media.uuid==uuid) & (Media.in_trash == trash_state))
         
             with self.db.atomic() as transaction:
                 try:
                     dest_filename = None
                     dest_thumbnail_filename = None
-                    file_path = self.get_file_trash_path(media_trash.unix_name)
-                    file_thumbnail_path = self.get_thumbnail_trash_path(media_trash.unix_name)
+                    file_path = self.get_file_path(media_trash.unix_name, trash_state=True)
+                    file_thumbnail_path = self.get_thumbnail_path(media_trash.unix_name, trash_state=True)
 
                     try:
                         if os.path.exists(file_thumbnail_path):
@@ -300,10 +329,9 @@ class CuemsDBMedia(StringSanitizer):
                         logger.error("error: {} {}; triying to move thumbnail from trash".format(type(e), e))
                         raise e
 
-                    if media_trash.media_type is MediaType.AUDIO:
-                        print("type is audio")
+                    if self.is_audio(media_trash):
                         dest_waveform_filename = None
-                        file_waveform_path = self.get_waveform_trash_path(media_trash.unix_name)
+                        file_waveform_path = self.get_waveform_path(media_trash.unix_name, trash_state=True)
                         try:
                             if os.path.exists(file_waveform_path):
                                 dest_waveform_filename = CopyMoveVersioned.move(file_waveform_path, self.waveform_path)
@@ -320,21 +348,21 @@ class CuemsDBMedia(StringSanitizer):
                     logger.error("error: {} {}; triying to move file to trash, rolling back database".format(type(e), e))
                     transaction.rollback()
                     if dest_filename is None and dest_thumbnail_filename is None:  # if move or copy where not sucessfull we dont need to clean and can end here forwarding the exception, else continue cleaning and then forward the exception
-                        if media_trash.media_type is MediaType.AUDIO:
+                        if self.is_audio(media_trash):
                             if dest_waveform_filename is None:
                                 raise e
                         else:
                             raise e
 
                     if os.path.exists(self.get_file_path(dest_filename)):
-                        shutil.move( self.get_file_path(dest_filename), self.get_file_trash_path(media_trash.unix_name))
+                        shutil.move( self.get_file_path(dest_filename), self.get_file_path(media_trash.unix_name, trash_state=True))
 
                     if os.path.exists(self.get_thumbnail_path(dest_thumbnail_filename)):
-                        shutil.move(self.get_thumbnail_path(dest_thumbnail_filename), self.get_thumbnail_trash_path(media_trash.unix_name))
+                        shutil.move(self.get_thumbnail_path(dest_thumbnail_filename), self.get_thumbnail_path(media_trash.unix_name, trash_state=True))
 
-                    if media_trash.media_type is MediaType.AUDIO:
+                    if self.is_audio(media_trash):
                         if os.path.exists(self.get_waveform_path(dest_waveform_filename)):
-                            shutil.move(self.get_waveform_path(dest_waveform_filename), self.get_waveform_trash_path(media_trash.unix_name))
+                            shutil.move(self.get_waveform_path(dest_waveform_filename), self.get_waveform_path(media_trash.unix_name, trash_state=True))
 
                     raise e
         except DoesNotExist:
@@ -342,24 +370,25 @@ class CuemsDBMedia(StringSanitizer):
 
     def delete_from_trash(self, uuid):
         try:
-            media = Media.get((Media.uuid==uuid) & (Media.in_trash == True))
+            trash_state=True
+            media = Media.get((Media.uuid==uuid) & (Media.in_trash == trash_state))
 
             with self.db.atomic() as transaction:
                 try:
-                    file_path = self.get_file_trash_path(media.unix_name)
-                    file_thumbnail_path = self.get_thumbnail_trash_path(media.unix_name)
+                    file_path = self.get_file_path(media.unix_name, trash_state=True)
+                    file_thumbnail_path = self.get_thumbnail_path(media.unix_name, trash_state=True)
                     
                     if os.path.exists(file_thumbnail_path):
                         os.remove(file_thumbnail_path)
 
-                    if media.media_type is MediaType.AUDIO:
-                        file_waveform_path = self.get_waveform_trash_path(media.unix_name)
+                    if self.is_audio(media):
+                        file_waveform_path = self.get_waveform_path(media.unix_name, trash_state=True)
                         if os.path.exists(file_waveform_path):
                             os.remove(file_waveform_path)
-                            
+
                     media.delete_instance(recursive=True)
                     os.remove(file_path)
-                    logger.debug('deleting media from trash: {}'.format(media))
+                    logger.debug('modifing instance in table: {}'.format(media))
                 except Exception as e:
                     logger.error("error: {} {}; triying to delete file from trash, rolling back database".format(type(e), e))
                     transaction.rollback()
@@ -383,6 +412,12 @@ class CuemsDBMedia(StringSanitizer):
             _type = MediaType.IMAGE
 
         return _type
+
+    def is_audio(self, db_record):
+        if db_record.media_type == MediaType.AUDIO.name:
+            return True
+        else:
+            return False
 
 
     def get_duration(self, filename):
@@ -418,7 +453,9 @@ class CuemsDBMedia(StringSanitizer):
             timecode = duration / 4
             timecode = f'{timecode.milliseconds}ms'
             result = subprocess.run(['ffmpeg', time_option, timecode, '-y', '-hide_banner', '-loglevel', 'warning', '-i', file_path, '-vf', f'scale={str(THUMBNAIL_W)}:-1', '-vframes', '1', thumbnail_file_path], stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-            
+        
+        if os.path.exists(thumbnail_file_path):
+            return thumbnail_file_path   
 
 
 
@@ -428,6 +465,9 @@ class CuemsDBMedia(StringSanitizer):
         thumbnail_file_path = self.get_thumbnail_path(filename)
         #TODO: support 24-bit data
         result = subprocess.run(['audiowaveform', '-i', file_path, '-o', thumbnail_file_path, '-e', str(duration.milliseconds/1000), '-w', str(THUMBNAIL_W), '-h', str(THUMBNAIL_H), '--no-axis-labels', '--amplitude-scale', '0.9'], stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        
+        if os.path.exists(thumbnail_file_path):
+            return thumbnail_file_path
 
     def create_audio_waveform(self, filename):
         # audiowaveform -i sample.wav -o sample.dat -b 8
@@ -435,35 +475,43 @@ class CuemsDBMedia(StringSanitizer):
         waveform_file_path = self.get_waveform_path(filename)
         result = subprocess.run(['audiowaveform', '-i', file_path, '-o', waveform_file_path, '-b', '8'], stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
 
-    def get_file_path(self, filename):
-        return os.path.join(self.media_path, filename)
+        if os.path.exists(waveform_file_path):
+            return waveform_file_path
 
-    def get_file_trash_path(self, filename):
-        return os.path.join(self.trash_path, filename)
+    def get_file_path(self, filename, trash_state=False):
+        if trash_state is False:
+            return os.path.join(self.media_path, filename)
+        else:
+            return os.path.join(self.trash_path, filename)
 
-    def get_thumbnail_path(self, filename):
+    def get_thumbnail_filename(self, filename):
         name_root, file_extension = os.path.splitext(filename)
-        thumbnail_file_name = f'{name_root}{THUMBNAIL_EXTENSION}'
-        thumbnail_file_path = os.path.join(self.thumbnail_path, thumbnail_file_name)
+        thumbnail_file_name = f'{name_root}_{file_extension[1:]}{THUMBNAIL_EXTENSION}'
+        return thumbnail_file_name
+
+    def get_thumbnail_path(self, filename, trash_state=False):
+        thumbnail_file_name = self.get_thumbnail_filename(filename)
+        if trash_state is False:
+            thumbnail_file_path = os.path.join(self.thumbnail_path, thumbnail_file_name)
+        else:
+            thumbnail_file_path = os.path.join(self.thumbnail_trash_path, thumbnail_file_name)
         return thumbnail_file_path
-    
-    def get_thumbnail_trash_path(self, filename):
-        name_root, file_extension = os.path.splitext(filename)
-        thumbnail_file_name = f'{name_root}{THUMBNAIL_EXTENSION}'
-        thumbnail_file_path = os.path.join(self.thumbnail_trash_path, thumbnail_file_name)
-        return thumbnail_file_path
 
-    def get_waveform_path(self, filename):
+    def get_waveform_filename(self, filename):
         name_root, file_extension = os.path.splitext(filename)
-        waveform_file_name = f'{name_root}{WAVEFORM_EXTENSION}'
-        waveform_file_path = os.path.join(self.waveform_path, waveform_file_name)
+        waveform_file_name = f'{name_root}_{file_extension[1:]}{WAVEFORM_EXTENSION}'
+        return waveform_file_name
+
+    def get_waveform_path(self, filename, trash_state=False):
+        waveform_file_name = self.get_waveform_filename(filename)
+        if trash_state is False:
+            waveform_file_path = os.path.join(self.waveform_path, waveform_file_name)
+        else:
+            waveform_file_path = os.path.join(self.waveform_trash_path, waveform_file_name)
         return waveform_file_path
 
-    def get_waveform_trash_path(self, filename):
-        name_root, file_extension = os.path.splitext(filename)
-        waveform_file_name = f'{name_root}{WAVEFORM_EXTENSION}'
-        waveform_file_path = os.path.join(self.waveform_trash_path, waveform_file_name)
-        return waveform_file_path
+
+
 
 class CuemsDBProject(StringSanitizer):
 
