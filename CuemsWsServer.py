@@ -42,8 +42,9 @@ logger_ws.setLevel(logging.INFO)  # websockets debug level,  in debug prints all
 
 class CuemsWsServer():
     
-    def __init__(self, _queue, settings_dict ):
-        self.queue = _queue
+    def __init__(self, engine_queue, editor_queue, settings_dict ):
+        self.editor_queue = editor_queue
+        self.engine_queue = engine_queue
         self.state = {"value": 0} #TODO: provisional
         self.users = dict()
         self.sessions = dict()
@@ -109,7 +110,7 @@ class CuemsWsServer():
         q.get is an I/O call, so it should release the GIL.
         """
         return (yield from self.event_loop.run_in_executor(concurrent.futures.ThreadPoolExecutor(thread_name_prefix='ws_QueueGet_ThreadPoolExecutor', max_workers=2), 
-                                           self.queue.get))
+                                           self.editor_queue.get))
 
     async def queue_handler(self):
         while True:
@@ -308,6 +309,8 @@ class CuemsWsUser():
                     await self.server.notify_state()
                 elif data["action"] == "project_load":
                     await self.send_project(data["value"], data["action"])
+                elif data["action"] == "project_ready":
+                    await self.project_ready(data["value"], data["action"])
                 elif data["action"] == "project_save":
                     await self.received_project(data["value"], data["action"])
                 elif data["action"] == "project_delete":
@@ -364,6 +367,12 @@ class CuemsWsUser():
         elif (action is not None) and (msg is not None) and (uuid is not None):
             await self.outgoing.put(json.dumps({"type": "error", "uuid": uuid, "action": action, "value": msg}))
 
+    async def project_ready(self, project_uuid, action):
+        logger.info("user {} requesting ready project {}".format(id(self.websocket), project_uuid))
+        unix_name = await self.server.event_loop.run_in_executor(self.server.executor, self.get_project_unix_name, project_uuid)
+        print(unix_name)
+        engine_command = {"action" : "load_project", "value" : unix_name}
+        await self.server.event_loop.run_in_executor(self.server.executor, self.server.engine_queue.put, engine_command)
 
     async def list_project(self, action):
         logger.info("user {} loading project list".format(id(self.websocket)))
@@ -605,6 +614,10 @@ class CuemsWsUser():
     def load_project_list(self):
         logger.info("loading project list")
         return self.server.db.project.list()
+
+    def get_project_unix_name(self, project_uuid):
+        logger.info("loading project unix_name")
+        return self.server.db.project.get_project_unix_name(project_uuid)
 
     
     def load_project(self, project_uuid):

@@ -531,14 +531,19 @@ class CuemsDBProject(StringSanitizer):
         self.trash_path = os.path.join(self.library_path, TRASH_FOLDER_NAME, PROJECT_FOLDER_NAME)
     
     
-    
-    
+    def get_project_unix_name(self, uuid):
+        try:
+            project = Project.get((Project.uuid==uuid) & (Project.in_trash == False))
+            return project.unix_name
+        except DoesNotExist:
+            raise NonExistentItemError("item with uuid: {} does not exist".format(uuid))
+        
     def load(self, uuid):
         try:
             project = Project.get((Project.uuid==uuid) & (Project.in_trash == False))
             return self.load_xml(project.unix_name)
         except DoesNotExist:
-            raise NonExistentItemError("item with uuid: {} does not exit".format(uuid))
+            raise NonExistentItemError("item with uuid: {} does not exist".format(uuid))
 
     def list(self):
         project_list = list()
