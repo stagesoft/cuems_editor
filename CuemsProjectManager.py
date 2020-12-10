@@ -200,7 +200,7 @@ class CuemsDBMedia(StringSanitizer):
                     raise e
             
         except DoesNotExist:
-            raise NonExistentItemError("item with uuid: {} does not exit".format(uuid))
+            raise NonExistentItemError("item with uuid: {} does not exist".format(uuid))
 
     def load_meta(self, uuid):
         try:
@@ -219,7 +219,7 @@ class CuemsDBMedia(StringSanitizer):
             return file_meta
             
         except DoesNotExist:
-            raise NonExistentItemError("item with uuid: {} does not exit".format(uuid))
+            raise NonExistentItemError("item with uuid: {} does not exist".format(uuid))
 
     def load_thumbnail(self, uuid):
         try:
@@ -234,7 +234,7 @@ class CuemsDBMedia(StringSanitizer):
                 raise NonExistentItemError("item with uuid: {} error reading thumbnail ; {}, {}".format(uuid, type(e), e))
             
         except DoesNotExist:
-            raise NonExistentItemError("item with uuid: {} does not exit".format(uuid))
+            raise NonExistentItemError("item with uuid: {} does not exist".format(uuid))
 
     def load_waveform(self, uuid):
         try:
@@ -249,7 +249,7 @@ class CuemsDBMedia(StringSanitizer):
                 raise NonExistentItemError("item with uuid: {} error reading  waveform ; {}, {}".format(uuid, type(e), e))
 
         except DoesNotExist:
-            raise NonExistentItemError("item with uuid: {} does not exit".format(uuid))
+            raise NonExistentItemError("item with uuid: {} does not exist".format(uuid))
 
         
     def delete(self, uuid):
@@ -311,7 +311,7 @@ class CuemsDBMedia(StringSanitizer):
                     raise e
 
         except DoesNotExist:
-            raise NonExistentItemError("item with uuid: {} does not exit".format(uuid))
+            raise NonExistentItemError("item with uuid: {} does not exist".format(uuid))
 
     def restore(self, uuid):
         try:
@@ -369,7 +369,7 @@ class CuemsDBMedia(StringSanitizer):
 
                     raise e
         except DoesNotExist:
-            raise NonExistentItemError("item with uuid: {} does not exit".format(uuid))
+            raise NonExistentItemError("item with uuid: {} does not exist".format(uuid))
 
     def delete_from_trash(self, uuid):
         try:
@@ -398,7 +398,7 @@ class CuemsDBMedia(StringSanitizer):
                     raise e
 
         except DoesNotExist:
-            raise NonExistentItemError("item with uuid: {} does not exit".format(uuid))
+            raise NonExistentItemError("item with uuid: {} does not exist".format(uuid))
 
     def get_type(self, filename):
         movie_list = ('.mov', '.avi', '.mkv', '.mpg', '.mp4')
@@ -562,7 +562,7 @@ class CuemsDBProject(StringSanitizer):
         try:
             project = Project.get((Project.uuid==uuid) & (Project.in_trash == False))
         except DoesNotExist:
-            raise NonExistentItemError("item with uuid: {} does not exit".format(uuid))
+            raise NonExistentItemError("item with uuid: {} does not exist".format(uuid))
 
         try:
             del data['CuemsScript']['unix_name']
@@ -652,7 +652,7 @@ class CuemsDBProject(StringSanitizer):
                     raise e
             
         except DoesNotExist:
-            raise NonExistentItemError("item with uuid: {} does not exit".format(uuid))
+            raise NonExistentItemError("item with uuid: {} does not exist".format(uuid))
 
     def delete(self, uuid):
         try:
@@ -675,7 +675,7 @@ class CuemsDBProject(StringSanitizer):
                     raise e
 
         except DoesNotExist:
-            raise NonExistentItemError("item with uuid: {} does not exit".format(uuid))
+            raise NonExistentItemError("item with uuid: {} does not exist".format(uuid))
     
     def restore(self, uuid):
         try:
@@ -698,7 +698,7 @@ class CuemsDBProject(StringSanitizer):
                         shutil.move( os.path.join(self.projects_path, dest_filename), os.path.join(self.trash_path, project_path.unix_name))
                     raise e
         except DoesNotExist:
-            raise NonExistentItemError("item with uuid: {} does not exit".format(uuid))
+            raise NonExistentItemError("item with uuid: {} does not exist".format(uuid))
 
     def delete_from_trash(self, uuid):
         try:
@@ -715,7 +715,7 @@ class CuemsDBProject(StringSanitizer):
                     transaction.rollback()
                     raise e
         except DoesNotExist:
-            raise NonExistentItemError("item with uuid: {} does not exit".format(uuid))
+            raise NonExistentItemError("item with uuid: {} does not exist".format(uuid))
 
     def add_media_relations(self, project, project_object, data):
         media_dict = project_object.get_media()

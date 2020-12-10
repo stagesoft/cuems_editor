@@ -63,14 +63,14 @@ class CuemsWsServer():
 
 
     def start(self, port):
-        self.process = Process(target=self.run_async_server, args=(self.queue,))
+        self.process = Process(target=self.run_async_server)
         self.port = port
         self.host = 'localhost'
         self.process.start()
 
         
 
-    def run_async_server(self, event):
+    def run_async_server(self):
         self.db = CuemsDBManager(self.settings_dict)
         self.event_loop = asyncio.new_event_loop()
         asyncio.set_event_loop(self.event_loop)
@@ -374,10 +374,9 @@ class CuemsWsUser():
             logger.error("error: {} {}".format(type(e), e))
             await self.notify_error_to_user(str(e),  action=action)
 
+
     async def send_project(self, project_uuid, action):
         try:
-            if project_uuid == '':
-                raise NonExistentItemError('project uuid is empty')
             logger.info("user {} loading project {}".format(id(self.websocket), project_uuid))
             project = await self.server.event_loop.run_in_executor(self.server.executor, self.load_project, project_uuid)
             msg = json.dumps({"type":"project", "value":project})
