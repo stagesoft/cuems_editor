@@ -14,6 +14,7 @@ Commands 													 ->	Responses
 
 {"action" : "project_list"}  									->  {"type": "project_list", "value": "project_list_json"}
 {"action" : "project_load", "value" : "project_uuid"}   		->  {"type": "project", "value": "project_json"}
+{"action" : "project_ready", "value" : "project_uuid"}   		->  {"type": "project_ready", "value": "project_uuid"}
 {"action" : "project_save", "value" : "project_json"}   		->  {"type": "project_save", "value": "project_uuid"}
 {"action" : "project_delete", "value" : "project_uuid"} 		->  {"type": "project_delete", "value": "project_uuid"}
 {"action" : "project_trash_list"}  							 	->  {"type": "project_trash_list", "value": "project_trash_list_json"}
@@ -38,6 +39,7 @@ Commands 													 ->	Responses
 Error responses
 
 				->	{"type": "error", "action": "project_list", "value": "error_msg"}
+				->	{"type": "error", "action": "project_ready", "value": "error_msg"}
 				->	{"type": "error", "action": "project_load", "uuid": "project_uuid", value": "error_msg"}
 				->	{"type": "error", "action": "project_save", "uuid": "project_uuid", value": "error_msg"}
 				->	{"type": "error", "action": "project_delete", "uuid": "project_uuid", value": "error_msg"}

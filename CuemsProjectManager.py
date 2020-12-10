@@ -7,6 +7,7 @@ import json
 import datetime
 import subprocess
 import re
+import struct
 from random import randint
 from enum import Enum, auto
 
@@ -227,9 +228,10 @@ class CuemsDBMedia(StringSanitizer):
             try:
                 with open(thumbnail_file_path, 'rb') as file:
                     media_thumbnail_binary_data = file.read()
-                return media_thumbnail_binary_data
+                return self.add_binary_header(media_thumbnail_binary_data, uuid, 1)
+
             except Exception as e:
-                raise NonExistentItemError("item with uuid: {} has no thumbnail".format(uuid))
+                raise NonExistentItemError("item with uuid: {} error reading thumbnail ; {}, {}".format(uuid, type(e), e))
             
         except DoesNotExist:
             raise NonExistentItemError("item with uuid: {} does not exit".format(uuid))
@@ -241,9 +243,10 @@ class CuemsDBMedia(StringSanitizer):
             try:
                 with open(waveform_file_path, 'rb') as file:
                     media_waveform_binary_data = file.read()
-                return media_waveform_binary_data
+                return self.add_binary_header(media_waveform_binary_data, uuid, 2)
+
             except Exception as e:
-                raise NonExistentItemError("item with uuid: {} has no waveform".format(uuid))
+                raise NonExistentItemError("item with uuid: {} error reading  waveform ; {}, {}".format(uuid, type(e), e))
 
         except DoesNotExist:
             raise NonExistentItemError("item with uuid: {} does not exit".format(uuid))
@@ -510,6 +513,11 @@ class CuemsDBMedia(StringSanitizer):
             waveform_file_path = os.path.join(self.waveform_trash_path, waveform_file_name)
         return waveform_file_path
 
+    def add_binary_header(self, binary_data, uuid_string, type_number):
+        # 36 bytes; first 36 positions, char = uuid 
+
+        return struct.pack('<36s', str.encode(uuid_string)) + binary_data 
+
 
 
 
@@ -752,12 +760,6 @@ class CuemsDBProject(StringSanitizer):
     def load_xml(self, unix_name):
         reader = XmlReader(schema = self.xsd_path, xmlfile = (os.path.join(self.projects_path, unix_name, SCRIPT_FILE_NAME)))
         return reader.read()
-
-    def check_uuid_uniqueness(self, project_object):
-        uuid_list = []
-        uuid_list.append(project_object.uuid)
-
-        uuid_list.append(project_object.cuelist.uuid)
 
             
 
