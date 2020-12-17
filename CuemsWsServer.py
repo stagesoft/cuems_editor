@@ -13,8 +13,7 @@ from random import randint
 from hashlib import md5
 import uuid as uuid_module
 import re
-
-import time
+from datetime import datetime
 
 from ..log import *
 
@@ -42,8 +41,10 @@ logger_ws.setLevel(logging.INFO)  # websockets debug level,  in debug prints all
 
 class CuemsWsServer():
     
-    def __init__(self, _queue, settings_dict ):
-        self.queue = _queue
+    def __init__(self, engine_queue, editor_queue, settings_dict ):
+        self.editor_queue = editor_queue
+        self.engine_queue = engine_queue
+        self.engine_messages = list()
         self.state = {"value": 0} #TODO: provisional
         self.users = dict()
         self.sessions = dict()
@@ -63,14 +64,14 @@ class CuemsWsServer():
 
 
     def start(self, port):
-        self.process = Process(target=self.run_async_server, args=(self.queue,))
+        self.process = Process(target=self.run_async_server)
         self.port = port
         self.host = 'localhost'
         self.process.start()
 
         
 
-    def run_async_server(self, event):
+    def run_async_server(self):
         self.db = CuemsDBManager(self.settings_dict)
         self.event_loop = asyncio.new_event_loop()
         asyncio.set_event_loop(self.event_loop)
@@ -109,19 +110,13 @@ class CuemsWsServer():
         q.get is an I/O call, so it should release the GIL.
         """
         return (yield from self.event_loop.run_in_executor(concurrent.futures.ThreadPoolExecutor(thread_name_prefix='ws_QueueGet_ThreadPoolExecutor', max_workers=2), 
-                                           self.queue.get))
+                                           self.editor_queue.get))
 
     async def queue_handler(self):
         while True:
             item = await self.async_get()
-            if self.users:
-                message = json.dumps({"type": "play_status", "value": item})
-                for user in self.users:
-                    #print(f'user {id(user)} gets {item}')
-                    await user.outgoing.put(message)
-            else:
-                pass
-                #print(f'No user to  get {item}')
+            logger.debug(f'Received queue message from engine {item}')
+            self.engine_messages.append(item)
                     
 
     async def connection_handler(self, websocket, path):
@@ -308,6 +303,8 @@ class CuemsWsUser():
                     await self.server.notify_state()
                 elif data["action"] == "project_load":
                     await self.send_project(data["value"], data["action"])
+                elif data["action"] == "project_ready":
+                    await self.project_ready(data["value"], data["action"])
                 elif data["action"] == "project_save":
                     await self.received_project(data["value"], data["action"])
                 elif data["action"] == "project_delete":
@@ -332,6 +329,8 @@ class CuemsWsUser():
                     await self.request_file_load_meta(data["value"], data["action"])
                 elif data["action"] == "file_load_thumbnail":
                     await self.request_file_load_thumbnail(data["value"], data["action"])
+                elif data["action"] == "file_load_waveform":
+                    await self.request_file_load_waveform(data["value"], data["action"])
                 elif data["action"] == "file_delete":
                     await self.request_delete_file(data["value"], data["action"])
                 elif data["action"] == "file_restore":
@@ -362,6 +361,44 @@ class CuemsWsUser():
         elif (action is not None) and (msg is not None) and (uuid is not None):
             await self.outgoing.put(json.dumps({"type": "error", "uuid": uuid, "action": action, "value": msg}))
 
+    async def project_ready(self, project_uuid, action):
+        logger.info("user {} requesting ready project {}".format(id(self.websocket), project_uuid))
+        try:
+            unix_name = await self.server.event_loop.run_in_executor(self.server.executor, self.get_project_unix_name, project_uuid)
+            action_uuid = str(uuid_module.uuid1())
+            engine_command = {"action" : "load_project", "action_uuid": action_uuid, "value" : unix_name}
+
+            try: 
+                await self.server.event_loop.run_in_executor(self.server.executor, self.server.engine_queue.put, engine_command)
+
+                start_time = datetime.now()
+                while True:
+                    time_delta = datetime.now() - start_time
+                    if time_delta.total_seconds() >= 10: #TODO: decide timeout, or get it from settings?
+                        raise TimeoutError('Timeout waiting response from engine')
+                    if self.server.engine_messages:
+                        for message in list(self.server.engine_messages): #iterate over a copy, so we can remove from the original, (bad idea to modify original while iterating over it)
+                            if "action_uuid" in message:
+                                if action_uuid in message['action_uuid']:
+                                    self.server.engine_messages.remove(message)
+                                    if 'type'  not in message:
+                                        raise EngineError(f'Engine reports error {message}')
+                                    if message['type'] != 'load_project' or message['value'] != 'OK':
+                                        raise EngineError(f'Engine reports error {message}')
+                                    break
+                        else:
+                            await asyncio.sleep(0.25)
+                            continue
+                        break
+                    
+                    await asyncio.sleep(0.25)
+                await self.outgoing.put(json.dumps({"type": "project_ready", "value": project_uuid}))
+
+            except Exception as e:
+                raise e
+        except Exception as e:
+            logger.error("error: {} {}".format(type(e), e))
+            await self.notify_error_to_user(str(e), uuid=project_uuid, action=action )
 
     async def list_project(self, action):
         logger.info("user {} loading project list".format(id(self.websocket)))
@@ -372,10 +409,9 @@ class CuemsWsUser():
             logger.error("error: {} {}".format(type(e), e))
             await self.notify_error_to_user(str(e),  action=action)
 
+
     async def send_project(self, project_uuid, action):
         try:
-            if project_uuid == '':
-                raise NonExistentItemError('project uuid is empty')
             logger.info("user {} loading project {}".format(id(self.websocket), project_uuid))
             project = await self.server.event_loop.run_in_executor(self.server.executor, self.load_project, project_uuid)
             msg = json.dumps({"type":"project", "value":project})
@@ -527,9 +563,23 @@ class CuemsWsUser():
             logger.info("user {} loading file thumbnail {}".format(id(self.websocket), file_uuid))
             
             file_thumbnail = await self.server.event_loop.run_in_executor(self.server.executor, self.load_file_thumbnail, file_uuid)
-            await self.outgoing.put(file_thumbnail)
+            await self.outgoing.put(file_thumbnail) #TODO: add uuid encoded in the binary message
         except NonExistentItemError as e:
-            logger.info(e)
+            logger.warning(e)
+            await self.notify_error_to_user(str(e), uuid=file_uuid, action=action)
+        except Exception as e:
+            logger.error("error: {} {}".format(type(e), e))
+            await self.notify_error_to_user(str(e), uuid=file_uuid, action=action)
+
+    async def request_file_load_waveform(self, file_uuid, action):
+        try:
+
+            logger.info("user {} loading file waveform {}".format(id(self.websocket), file_uuid))
+            
+            file_waveform = await self.server.event_loop.run_in_executor(self.server.executor, self.load_file_waveform, file_uuid)
+            await self.outgoing.put(file_waveform) #TODO: add uuid encoded in the binary message
+        except NonExistentItemError as e:
+            logger.warning(e)
             await self.notify_error_to_user(str(e), uuid=file_uuid, action=action)
         except Exception as e:
             logger.error("error: {} {}".format(type(e), e))
@@ -591,6 +641,10 @@ class CuemsWsUser():
         logger.info("loading project list")
         return self.server.db.project.list()
 
+    def get_project_unix_name(self, project_uuid):
+        logger.info("loading project unix_name")
+        return self.server.db.project.get_project_unix_name(project_uuid)
+
     
     def load_project(self, project_uuid):
         logger.info("loading project: {}".format(project_uuid))
@@ -632,6 +686,10 @@ class CuemsWsUser():
     def load_file_thumbnail(self, uuid):
         logger.info("loading file thumbnail")
         return self.server.db.media.load_thumbnail(uuid)
+
+    def load_file_waveform(self, uuid):
+        logger.info("loading file waveform")
+        return self.server.db.media.load_waveform(uuid)
 
 
     def save_file(self, file_uuid, data):
