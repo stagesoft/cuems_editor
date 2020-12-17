@@ -13,8 +13,7 @@ from random import randint
 from hashlib import md5
 import uuid as uuid_module
 import re
-
-import time
+from datetime import datetime
 
 from ..log import *
 
@@ -45,6 +44,7 @@ class CuemsWsServer():
     def __init__(self, engine_queue, editor_queue, settings_dict ):
         self.editor_queue = editor_queue
         self.engine_queue = engine_queue
+        self.engine_messages = list()
         self.state = {"value": 0} #TODO: provisional
         self.users = dict()
         self.sessions = dict()
@@ -115,14 +115,8 @@ class CuemsWsServer():
     async def queue_handler(self):
         while True:
             item = await self.async_get()
-            if self.users:
-                message = json.dumps({"type": "play_status", "value": item})
-                for user in self.users:
-                    #print(f'user {id(user)} gets {item}')
-                    await user.outgoing.put(message)
-            else:
-                pass
-                #print(f'No user to  get {item}')
+            logger.debug(f'Received queue message from engine {item}')
+            self.engine_messages.append(item)
                     
 
     async def connection_handler(self, websocket, path):
@@ -369,10 +363,42 @@ class CuemsWsUser():
 
     async def project_ready(self, project_uuid, action):
         logger.info("user {} requesting ready project {}".format(id(self.websocket), project_uuid))
-        unix_name = await self.server.event_loop.run_in_executor(self.server.executor, self.get_project_unix_name, project_uuid)
-        print(unix_name)
-        engine_command = {"action" : "load_project", "value" : unix_name}
-        await self.server.event_loop.run_in_executor(self.server.executor, self.server.engine_queue.put, engine_command)
+        try:
+            unix_name = await self.server.event_loop.run_in_executor(self.server.executor, self.get_project_unix_name, project_uuid)
+            action_uuid = str(uuid_module.uuid1())
+            engine_command = {"action" : "load_project", "action_uuid": action_uuid, "value" : unix_name}
+
+            try: 
+                await self.server.event_loop.run_in_executor(self.server.executor, self.server.engine_queue.put, engine_command)
+
+                start_time = datetime.now()
+                while True:
+                    time_delta = datetime.now() - start_time
+                    if time_delta.total_seconds() >= 10: #TODO: decide timeout, or get it from settings?
+                        raise TimeoutError('Timeout waiting response from engine')
+                    if self.server.engine_messages:
+                        for message in list(self.server.engine_messages): #iterate over a copy, so we can remove from the original, (bad idea to modify original while iterating over it)
+                            if "action_uuid" in message:
+                                if action_uuid in message['action_uuid']:
+                                    self.server.engine_messages.remove(message)
+                                    if 'type'  not in message:
+                                        raise EngineError(f'Engine reports error {message}')
+                                    if message['type'] != 'load_project' or message['value'] != 'OK':
+                                        raise EngineError(f'Engine reports error {message}')
+                                    break
+                        else:
+                            await asyncio.sleep(0.25)
+                            continue
+                        break
+                    
+                    await asyncio.sleep(0.25)
+                await self.outgoing.put(json.dumps({"type": "project_ready", "value": project_uuid}))
+
+            except Exception as e:
+                raise e
+        except Exception as e:
+            logger.error("error: {} {}".format(type(e), e))
+            await self.notify_error_to_user(str(e), uuid=project_uuid, action=action )
 
     async def list_project(self, action):
         logger.info("user {} loading project list".format(id(self.websocket)))

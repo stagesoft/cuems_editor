@@ -6,3 +6,5 @@ class NonExistentItemError(CuemsWsServerError):
     pass
 class NotTimeCodeError(CuemsWsServerError):
     pass
+class EngineError(CuemsWsServerError):
+    pass

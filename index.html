@@ -491,7 +491,8 @@
                 console.log(event.data.slice(36))
                 console.log(objectURL)
                 document.querySelector("#thumbnail").src = objectURL;
-                var fr = new FileReader(); fr.onload = function(e) {     console.log(e.target.result) };
+                var fr = new FileReader();
+                fr.onload = function(e) {     console.log(e.target.result) };
                 fr.readAsText(uuid);
 
                 var reader = new FileReader();
@@ -534,6 +535,12 @@
                         break;
                     case 'file_load_meta':
                         content.value = JSON.stringify(data.value);
+                        break;
+                    case 'project_ready':
+                        var element = document.createElement("div");
+                        element.appendChild(document.createTextNode("project " + JSON.stringify(data.value) + " ready!!"));
+                        notifications.appendChild(element);
+                        notifications.style.display = 'block';
                         break;
                     case 'project_save':
                         var element = document.createElement("div");
