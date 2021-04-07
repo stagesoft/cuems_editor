@@ -82,7 +82,7 @@ class CuemsWsServer():
             self.event_loop.add_signal_handler(sig, self.ask_exit)
         logger.info('server listening on {}, port {}'.format(self.host, self.port))
         self.event_loop.run_until_complete(self.project_server)
-        self.event_loop.create_task(self.queue_handler())
+        self.queue_task = self.event_loop.create_task(self.queue_handler())
         self.event_loop.run_forever()
         self.event_loop.close()
         
@@ -92,6 +92,7 @@ class CuemsWsServer():
         logger.info('ws process joined')
         
     def ask_exit(self):
+        #self.event_loop.call_soon_threadsafe(self.queue_task.cancel)
         self.event_loop.call_soon_threadsafe(self.project_server.ws_server.close)
         logger.info('ws server closing')
         asyncio.run_coroutine_threadsafe(self.stop_async(), self.event_loop)
