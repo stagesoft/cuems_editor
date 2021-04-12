@@ -1,5 +1,4 @@
 from peewee import *
-import os
 
 from .CuemsUtils import date_now_iso_utc
 
