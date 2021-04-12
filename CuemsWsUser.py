@@ -60,6 +60,10 @@ class CuemsWsUser():
                     await self.send_project(data["value"], data["action"])
                 elif data["action"] == "project_ready":
                     await self.project_ready(data["value"], data["action"])
+                elif data["action"] == "hw_discovery":
+                    await self.hw_discovery(data["action"])
+                elif data["action"] == "project_deploy":
+                    await self.project_deploy(data["value"], data["action"])
                 elif data["action"] == "project_save":
                     await self.received_project(data["value"], data["action"])
                 elif data["action"] == "project_delete":
@@ -116,43 +120,79 @@ class CuemsWsUser():
         elif (action is not None) and (msg is not None) and (uuid is not None):
             await self.outgoing.put(json.dumps({"type": "error", "uuid": uuid, "action": action, "value": msg}))
 
+    async def comunicate_with_engine(self, action, action_uuid, engine_command):
+        try: 
+            await self.server.event_loop.run_in_executor(self.server.executor, self.server.engine_queue.put, engine_command)
+
+            start_time = datetime.now()
+            while True:
+                time_delta = datetime.now() - start_time
+                if time_delta.total_seconds() >= 10: #TODO: decide timeout, or get it from settings?
+                    raise TimeoutError(f'Timeout waiting {action} response from engine')
+                if self.server.engine_messages:
+                    for message in list(self.server.engine_messages): #iterate over a copy, so we can remove from the original, (bad idea to modify original while iterating over it)
+                        if "action_uuid" in message:
+                            if action_uuid in message['action_uuid']:
+                                self.server.engine_messages.remove(message)
+                                if 'type'  not in message:
+                                    raise EngineError(f'Engine reports error {message}')
+                                if message['type'] != action or message['value'] != 'OK':
+                                    raise EngineError(f'Engine reports error {message}')
+                                return message['value']
+                    else:
+                        await asyncio.sleep(0.25)
+                        continue
+                    break
+                
+                await asyncio.sleep(0.25)
+
+        except Exception as e:
+            raise e
+
+        
+
     async def project_ready(self, project_uuid, action):
-        logger.info("user {} requesting ready project {}".format(id(self.websocket), project_uuid))
+        logger.info(f"user {id(self.websocket)} requesting ready project {project_uuid}")
         try:
             unix_name = await self.server.event_loop.run_in_executor(self.server.executor, self.get_project_unix_name, project_uuid)
             action_uuid = str(uuid_module.uuid1())
             engine_command = {"action" : "load_project", "action_uuid": action_uuid, "value" : unix_name}
 
-            try: 
-                await self.server.event_loop.run_in_executor(self.server.executor, self.server.engine_queue.put, engine_command)
+            result = await self.comunicate_with_engine(action, action_uuid, engine_command)
 
-                start_time = datetime.now()
-                while True:
-                    time_delta = datetime.now() - start_time
-                    if time_delta.total_seconds() >= 10: #TODO: decide timeout, or get it from settings?
-                        raise TimeoutError('Timeout waiting response from engine')
-                    if self.server.engine_messages:
-                        for message in list(self.server.engine_messages): #iterate over a copy, so we can remove from the original, (bad idea to modify original while iterating over it)
-                            if "action_uuid" in message:
-                                if action_uuid in message['action_uuid']:
-                                    self.server.engine_messages.remove(message)
-                                    if 'type'  not in message:
-                                        raise EngineError(f'Engine reports error {message}')
-                                    if message['type'] != 'load_project' or message['value'] != 'OK':
-                                        raise EngineError(f'Engine reports error {message}')
-                                    break
-                        else:
-                            await asyncio.sleep(0.25)
-                            continue
-                        break
-                    
-                    await asyncio.sleep(0.25)
-                await self.outgoing.put(json.dumps({"type": "project_ready", "value": project_uuid}))
+            await self.outgoing.put(json.dumps({"type": "project_ready", "value": project_uuid}))
 
-            except Exception as e:
-                raise e
+        except Exception as e:
+            logger.error(f"error: {type(e)} {e}")
+            await self.notify_error_to_user(str(e), uuid=project_uuid, action=action )
+
+    async def hw_discovery(self, action):
+        logger.info(f"user {id(self.websocket)} requesting hardware dicovery")
+        try:
+            action_uuid = str(uuid_module.uuid1())
+            engine_command = {"action" : "hw_discovery", "action_uuid": action_uuid}
+
+            result = await self.comunicate_with_engine(action, action_uuid, engine_command)
+
+            await self.outgoing.put(json.dumps({"type": "hw_discovery", "value": result}))
+
         except Exception as e:
             logger.error("error: {} {}".format(type(e), e))
+            await self.notify_error_to_user(str(e), action=action )
+
+    async def project_deploy(self, project_uuid, action):
+        logger.info(f"user {id(self.websocket)} requesting deploy project {project_uuid}")
+        try:
+            unix_name = await self.server.event_loop.run_in_executor(self.server.executor, self.get_project_unix_name, project_uuid)
+            action_uuid = str(uuid_module.uuid1())
+            engine_command = {"action" : "project_deploy", "action_uuid": action_uuid, "value" : unix_name}
+
+            result = await self.comunicate_with_engine(action, action_uuid, engine_command)
+
+            await self.outgoing.put(json.dumps({"type": "project_deploy", "value": project_uuid}))
+
+        except Exception as e:
+            logger.error(f"error: {type(e)} {e}")
             await self.notify_error_to_user(str(e), uuid=project_uuid, action=action )
 
     async def list_project(self, action):

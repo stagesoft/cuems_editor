@@ -11,17 +11,17 @@ Commands 													 ->	Responses
 																->  {"type" : "list_update", "value": "file_list"}
 																->  {"type" : "list_update", "value": "file_trash_list"}
 
-
 {"action" : "project_list"}  									->  {"type": "project_list", "value": "project_list_json"}
 {"action" : "project_load", "value" : "project_uuid"}   		->  {"type": "project", "value": "project_json"}
 {"action" : "project_ready", "value" : "project_uuid"}   		->  {"type": "project_ready", "value": "project_uuid"}
+{"action" : "project_deploy", "value" : "project_uuid"}   		->  {"type": "project_deploy", "value": "project_uuid"}
+
 {"action" : "project_save", "value" : "project_json"}   		->  {"type": "project_save", "value": "project_uuid"}
 {"action" : "project_delete", "value" : "project_uuid"} 		->  {"type": "project_delete", "value": "project_uuid"}
 {"action" : "project_trash_list"}  							 	->  {"type": "project_trash_list", "value": "project_trash_list_json"}
 {"action" : "project_restore", "value" : "project_uuid"}  		->  {"type": "project_recover", "value": "project_uuid"}
 {"action" : "project_trash_delete", "value" : "project_uuid"}	->  {"type": "project_trash_delete", "value": "project_uuid"}
 {"action" : "project_duplicate", "value" : "project_uuid"}		->  {"type": "project_duplicate", "value": {"uuid": "project_uuid", "new_uuid": "duplicated_project_uuid" }
-
 
 {"action" : "file_list"}  										->  {"type": "file_list", "value": "file_list_json"}
 {"action" : "file_load_meta", "value" : "file_uuid"}  			->  {"type": "file_load_meta", "value": "file_metadata_json"}
@@ -34,12 +34,14 @@ Commands 													 ->	Responses
 {"action" : "file_restore", "value" : "file_uuid"}  			->  {"type": "file_recover", "value": "file_uuid"}
 {"action" : "file_trash_delete", "value" : "file_uuid"}			->  {"type": "file_trash_delete", "value": "file_uuid"}
 
+{"action" : "hw_discovery"}   									->  {"type": "hw_discovery", "value": "hardware_json"}
 
 
 Error responses
 
 				->	{"type": "error", "action": "project_list", "value": "error_msg"}
-				->	{"type": "error", "action": "project_ready", "value": "error_msg"}
+				->	{"type": "error", "action": "project_ready", "uuid": "project_uuid", "value": "error_msg"}
+				->	{"type": "error", "action": "project_deploy", "uuid": "project_uuid", "value": "error_msg"}
 				->	{"type": "error", "action": "project_load", "uuid": "project_uuid", value": "error_msg"}
 				->	{"type": "error", "action": "project_save", "uuid": "project_uuid", value": "error_msg"}
 				->	{"type": "error", "action": "project_delete", "uuid": "project_uuid", value": "error_msg"}
@@ -47,7 +49,6 @@ Error responses
 				->	{"type": "error", "action": "project_restore", "uuid" : "project_uuid", "value": "error_msg"}
 				->	{"type": "error", "action": "project_trash_delete", "uuid" : "project_uuid", "value": "error_msg"}
 
-														
 				->	{"type": "error", "action": "file_list", "value": "error_msg"}
 				->	{"type": "error", "action": "file_load", "uuid": "project_uuid", value": "error_msg"}
 				->	{"type": "error", "action": "file_save", "uuid": "project_uuid", value": "error_msg"}
@@ -56,20 +57,7 @@ Error responses
 				->	{"type": "error", "action": "file_restore", "uuid" : "file_uuid", "value": "error_msg"}
 				->	{"type": "error", "action": "file_trash_delete", "uuid" : "file_uuid", "value": "error_msg"}
 
+				->	{"type": "error", "action": "hw_discovery", "value": "error_msg"}
+
 				->  {"type": "error", "value": "unsupported event: event"}
 				->  {"type": "error", "value": "unsupported action: action"}
-
-
-
-/upload
-
-{ "action": "upload", "value": { "name": "filename", "size": "file_size" }  ->  { "ready" : true } or { "error" : "error_message", "fatal": "[true, false]" }
-{ binary blob}																->  { "ready" : true } or { "error" : "error_message", "fatal": "[true, false]" }
-{ binary blob}																->  { "ready" : true } or { "error" : "error_message", "fatal": "[true, false]" }
-{ "action" : "finished", "value" : "file_md5_hash"}							->  { "close" : true } or { "error" : "error_message", "fatal": "[true, false]" }
-
-# if error message is received with { "fatal"  : true}, connection must be closed and upload process re-started. If error is with { "fatal" : false}, error is not fatal and upload process can be continued re-sending the failed command
-
-# on { "close" : true } connection must be closed and implies file transfer and saving was ok
-
-# for each file upload we open a new websocket connection, this way simultaneous parallel file uploads are supported, each having its own /upload connection

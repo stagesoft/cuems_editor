@@ -29,10 +29,10 @@ logger_ws_server.setLevel(logging.DEBUG)
 handler.setFormatter(formatter)
 
 logger_asyncio = logging.getLogger('asyncio')
-logger_asyncio.setLevel(logging.INFO)  # asyncio debug level 
+logger_asyncio.setLevel(logging.WARNING)  # asyncio debug level 
 
 logger_ws = logging.getLogger('websockets')
-logger_ws.setLevel(logging.INFO)  # websockets debug level,  in debug prints all frames, also binary frames! 
+logger_ws.setLevel(logging.WARNING)  # websockets debug level,  in debug prints all frames, also binary frames! 
 
 
 class CuemsWsServer():
@@ -235,7 +235,7 @@ class CuemsWsServer():
 
 
 
-    # warning, this non async function should bet not blocking or user @sync_to_async to get their own thread
+    # warning, these non async functions should be not blocking or user @sync_to_async to get their own thread
     def counter_event(self):
         return json.dumps({"type": "counter", **self.state})
 

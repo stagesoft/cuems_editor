@@ -155,7 +155,7 @@
                 /////
                 var params = {};
                 params.file = file;
-                params.url = "wss://dev.stagelab.net/upload";
+                params.url = "ws://localhost/upload";
                 params.progressbar = progressBar;
                 params.chunksize = 500000;
                 params.onerror = function (status) {
@@ -453,7 +453,7 @@
         var project_id = document.querySelector('#project_id');
 
         //websocket = new WebSocket("wss://dev.stagelab.net/ws");
-        websocket = new WebSocket("wss://dev.stagelab.net/ws?session=" + getCookie('session_id'));
+        websocket = new WebSocket("ws://localhost/ws?session=" + getCookie('session_id'));
         minus.onclick = function (event) {
             websocket.send(JSON.stringify({ action: 'minus' }));
         }
