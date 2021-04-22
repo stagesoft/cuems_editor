@@ -1,7 +1,9 @@
 /ws
 
 Commands 													 ->	Responses
+																
 
+																->  {"type" : "initial_mappings", "value": "mapings_json"}
 																->  {"type" : "users", "value": "connected_users_count"}
 
 																->  {"type" : "project_update", "value" : "project_uuid"}

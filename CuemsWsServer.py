@@ -37,14 +37,15 @@ logger_ws.setLevel(logging.WARNING)  # websockets debug level,  in debug prints 
 
 class CuemsWsServer():
     
-    def __init__(self, engine_queue, editor_queue, settings_dict ):
+#    def __init__(self, engine_queue, editor_queue, settings_dict, mappings_dict ):
+    def __init__(self, engine_queue, editor_queue, settings_dict):
         self.editor_queue = editor_queue
         self.engine_queue = engine_queue
         self.engine_messages = list()
-        self.state = {"value": 0} #TODO: provisional
         self.users = dict()
         self.sessions = dict()
         self.settings_dict = settings_dict
+    #    self.mappings_dict = mappings_dict
         try:
             self.tmp_upload_path = self.settings_dict['tmp_upload_path']
             self.session_uuid = self.settings_dict['session_uuid']
@@ -198,11 +199,6 @@ class CuemsWsServer():
         self.users.pop(user_task, None)
         await self.notify_users("users")
 
-    async def notify_state(self):
-        if self.users:  # asyncio.wait doesn't accept an empty dcit
-            message = self.counter_event()
-            for user in self.users:
-                await user.outgoing.put(message)
 
     async def notify_others_list_changes(self, calling_user, list_type):
         if self.users:  #notify others, not the user trigering the action, and only if the have same project loaded
@@ -236,8 +232,7 @@ class CuemsWsServer():
 
 
     # warning, these non async functions should be not blocking or user @sync_to_async to get their own thread
-    def counter_event(self):
-        return json.dumps({"type": "counter", **self.state})
+
 
 
     def users_event(self, type, uuid=None):

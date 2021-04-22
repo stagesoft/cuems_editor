@@ -50,12 +50,6 @@ class CuemsWsUser():
                 if "action" not in data:
                     logger.error("unsupported event: {}".format(data))
                     await self.notify_error_to_user("unsupported event: {}".format(data))
-                elif data["action"] == "minus":
-                    self.server.state["value"] -= 1
-                    await self.server.notify_state()
-                elif data["action"] == "plus":
-                    self.server.state["value"] += 1
-                    await self.server.notify_state()
                 elif data["action"] == "project_load":
                     await self.send_project(data["value"], data["action"])
                 elif data["action"] == "project_ready":
