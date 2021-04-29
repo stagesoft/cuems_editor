@@ -150,7 +150,7 @@ class CuemsWsUser():
         try:
             unix_name = await self.server.event_loop.run_in_executor(self.server.executor, self.get_project_unix_name, project_uuid)
             action_uuid = str(uuid_module.uuid1())
-            engine_command = {"action" : "load_project", "action_uuid": action_uuid, "value" : unix_name}
+            engine_command = {"action" : "project_ready", "action_uuid": action_uuid, "value" : unix_name}
 
             result = await self.comunicate_with_engine(action, action_uuid, engine_command)
 

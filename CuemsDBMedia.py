@@ -80,7 +80,7 @@ class CuemsDBMedia(StringSanitizer):
                         dest_thumbnail_filename = None
                         dest_thumbnail_filename = self.create_video_thubnail(dest_filename, None)
                 except Exception as e:
-                    logger.warning(f'could not generate {_type} thumbnail or waveform; error : {e}')
+                    logger.exception(f'could not generate {_type} thumbnail or waveform; error : {e}')
                     media_thumbnail_binary_data = None
 
                     
@@ -405,8 +405,7 @@ class CuemsDBMedia(StringSanitizer):
             result = subprocess.run(['ffmpeg', '-y', '-hide_banner', '-loglevel', 'warning', '-i', file_path, '-vf', f'scale={str(THUMBNAIL_W)}:-1', '-vframes', '1', thumbnail_file_path], stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
         else:
             time_option = "-ss"
-            timecode = duration / 4
-            timecode = f'{timecode.milliseconds}ms'
+            timecode = f'200ms'
             result = subprocess.run(['ffmpeg', time_option, timecode, '-y', '-hide_banner', '-loglevel', 'warning', '-i', file_path, '-vf', f'scale={str(THUMBNAIL_W)}:-1', '-vframes', '1', thumbnail_file_path], stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
         
         if os.path.exists(thumbnail_file_path):
