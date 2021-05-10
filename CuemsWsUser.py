@@ -121,7 +121,7 @@ class CuemsWsUser():
             start_time = datetime.now()
             while True:
                 time_delta = datetime.now() - start_time
-                if time_delta.total_seconds() >= 10: #TODO: decide timeout, or get it from settings?
+                if time_delta.total_seconds() >= 30: #TODO: decide timeout, or get it from settings?
                     raise TimeoutError(f'Timeout waiting {action} response from engine')
                 if self.server.engine_messages:
                     for message in list(self.server.engine_messages): #iterate over a copy, so we can remove from the original, (bad idea to modify original while iterating over it)
