@@ -126,7 +126,7 @@ class CuemsDBMedia(StringSanitizer):
         media_list = list()
 
         medias = (Media
-         .select(Media.uuid, Media.name, Media.unix_name, Media.created, Media.modified,
+         .select(Media.uuid, Media.name, Media.unix_name, Media.created, Media.modified, Media.media_type,
          fn.COUNT(Case(Project.in_trash, (('0', 1),), None)).alias('in_project_count'),
          fn.COUNT(Case(Project.in_trash, (('1', 1),), None)).alias('in_project_trash_count'))
          .join(ProjectMedia, JOIN.LEFT_OUTER)  # Joins tweet -> favorite.
@@ -134,7 +134,7 @@ class CuemsDBMedia(StringSanitizer):
          .where(Media.in_trash==True)
          .group_by(Media.uuid))
         for media in medias:
-            media_dict = {str(media.uuid): {'name': media.name, 'unix_name': media.unix_name, 'created': media.created, 'modified': media.modified, "in_projects": media.in_project_count, "in_trash_projects" : media.in_project_trash_count} }
+            media_dict = {str(media.uuid): {'name': media.name, 'unix_name': media.unix_name, 'created': media.created, 'modified': media.modified, 'type': media.media_type, "in_projects": media.in_project_count, "in_trash_projects" : media.in_project_trash_count} }
             media_list.append(media_dict)
 
         return media_list
