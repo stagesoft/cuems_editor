@@ -46,7 +46,7 @@ class CuemsWsServer():
         self.settings_dict = settings_dict
         self.mappings_dict = mappings_dict
         try:
-            self.tmp_upload_path = self.settings_dict['tmp_upload_path']
+            self.tmp_path = self.settings_dict['tmp_path']
             self.session_uuid = self.settings_dict['session_uuid']
             self.library_path = self.settings_dict['library_path']
         except KeyError as e:
@@ -54,7 +54,7 @@ class CuemsWsServer():
             raise e
         logger.debug(f'library path set to : {self.library_path}')
 
-        if (not os.path.exists(self.tmp_upload_path)) or ( not os.access(self.tmp_upload_path,  os.X_OK & os.R_OK & os.W_OK)):
+        if (not os.path.exists(self.tmp_path)) or ( not os.access(self.tmp_path,  os.X_OK & os.R_OK & os.W_OK)):
             logger.error("error: upload folder is not usable")
             raise FileNotFoundError('Can not access upload folder')
 

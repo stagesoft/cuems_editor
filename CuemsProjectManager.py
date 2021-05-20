@@ -32,7 +32,7 @@ class CuemsDBManager():
         try:
             self.library_path = settings_dict['library_path']
             self.db_name = settings_dict['database_name']
-            self.tmp_upload_path = settings_dict['tmp_upload_path']
+            self.tmp_path = settings_dict['tmp_path']
         except KeyError as e:
             logger.error(f'can not read settings {e}')
             raise e
@@ -51,7 +51,7 @@ class CuemsDBManager():
         # safe=True uses IF NOT EXIST on table create
         database.create_tables( self.models, safe=True) 
         self.project = CuemsDBProject(self.library_path, self.xsd_path, database)
-        self.media = CuemsDBMedia(self.library_path, self.tmp_upload_path, database)
+        self.media = CuemsDBMedia(self.library_path, self.tmp_path, database)
  
 
 

@@ -24,7 +24,7 @@ class CuemsUpload(StringSanitizer):
     def __init__(self, server, websocket):
         self.server = server
         self.websocket = websocket
-        self.tmp_upload_path = self.server.tmp_upload_path
+        self.tmp_path = self.server.tmp_path
         self.media_path = self.server.db.media.media_path
         
     async def message_handler(self):
@@ -125,7 +125,7 @@ class CuemsUpload(StringSanitizer):
 
     def tmp_file_path(self):
         if not self.tmp_filename is None:
-            return os.path.join(self.tmp_upload_path, self.tmp_filename)
+            return os.path.join(self.tmp_path, self.tmp_filename)
 
     def __del__(self):
         try:

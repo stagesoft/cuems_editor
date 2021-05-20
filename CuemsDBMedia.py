@@ -33,9 +33,9 @@ class MediaType(Enum):
 
 class CuemsDBMedia(StringSanitizer):
 
-    def __init__(self, library_path, tmp_upload_path, db_connection):
+    def __init__(self, library_path, tmp_path, db_connection):
         self.library_path = library_path
-        self.tmp_upload_path = tmp_upload_path
+        self.tmp_path = tmp_path
         self.db = db_connection
         self.media_path = os.path.join(self.library_path, MEDIA_FOLDER_NAME)
         self.trash_path = os.path.join(self.library_path, TRASH_FOLDER_NAME, MEDIA_FOLDER_NAME)
