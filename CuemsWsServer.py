@@ -3,6 +3,7 @@ import concurrent.futures
 import json
 import os
 import websockets as ws
+from websockets.legacy.server import broadcast, serve
 from multiprocessing import Process
 import signal
 from random import randint  #TODO: clean unused
@@ -60,20 +61,19 @@ class CuemsWsServer():
 
 
     def start(self, port):
+        print("process starting")
         self.process = Process(target=self.run_async_server)
         self.port = port
         self.host = 'localhost'
         self.process.start()
 
-        
-
     def run_async_server(self):
         self.db = CuemsDBManager(self.settings_dict)
-        self.event_loop = asyncio.new_event_loop()
+        self.event_loop = asyncio.new_event_loop()   
         asyncio.set_event_loop(self.event_loop)
         self.executor =  concurrent.futures.ThreadPoolExecutor(thread_name_prefix='ws_ProjectManager_ThreadPoolExecutor', max_workers=5) # TODO: adjust max workers
         #self.event_loop.set_exception_handler(self.exception_handler) ### TODO:UNCOMENT FOR PRODUCTION 
-        self.project_server = ws.serve(self.connection_handler, self.host, self.port, max_size=None) #TODO: choose max packets size from ui and limit it here
+        self.project_server = serve(self.connection_handler, self.host, self.port) 
         for sig in (signal.SIGINT, signal.SIGTERM):
             self.event_loop.add_signal_handler(sig, self.ask_exit)
         logger.info('server listening on {}, port {}'.format(self.host, self.port))
@@ -100,13 +100,12 @@ class CuemsWsServer():
         self.event_loop.call_soon(self.event_loop.stop)
         logger.info('event loop stoped')
     
-    @asyncio.coroutine
-    def async_get(self):
+    async def async_get(self):
 
         """ Calls q.get() in a separate Thread. 
         q.get is an I/O call, so it should release the GIL.
         """
-        return (yield from self.event_loop.run_in_executor(concurrent.futures.ThreadPoolExecutor(thread_name_prefix='ws_QueueGet_ThreadPoolExecutor', max_workers=2), 
+        return (await self.event_loop.run_in_executor(concurrent.futures.ThreadPoolExecutor(thread_name_prefix='ws_QueueGet_ThreadPoolExecutor', max_workers=2), 
                                            self.editor_queue.get))
 
     async def queue_handler(self):
