@@ -3,7 +3,7 @@ import concurrent.futures
 import json
 import os
 import websockets as ws
-from websockets.legacy.server import broadcast, serve
+from websockets.asyncio.server import serve
 from multiprocessing import Process
 import signal
 from random import randint  #TODO: clean unused
@@ -61,41 +61,36 @@ class CuemsWsServer():
 
 
     def start(self, port):
-        print("process starting")
-        self.process = Process(target=self.run_async_server)
         self.port = port
         self.host = 'localhost'
-        self.process.start()
-
-    def run_async_server(self):
+        newfeature = asyncio.get_event_loop().run_until_complete(self.run_async_server())
+    
+    async def run_async_server(self):
         self.db = CuemsDBManager(self.settings_dict)
-        self.event_loop = asyncio.new_event_loop()   
-        asyncio.set_event_loop(self.event_loop)
+        self.event_loop = asyncio.get_event_loop()
+        
         self.executor =  concurrent.futures.ThreadPoolExecutor(thread_name_prefix='ws_ProjectManager_ThreadPoolExecutor', max_workers=5) # TODO: adjust max workers
         #self.event_loop.set_exception_handler(self.exception_handler) ### TODO:UNCOMENT FOR PRODUCTION 
-        self.project_server = serve(self.connection_handler, self.host, self.port) 
+        self.project_server = await serve(self.connection_handler, self.host, self.port) 
         for sig in (signal.SIGINT, signal.SIGTERM):
             self.event_loop.add_signal_handler(sig, self.ask_exit)
         logger.info('server listening on {}, port {}'.format(self.host, self.port))
-        self.event_loop.run_until_complete(self.project_server)
         self.queue_task = self.event_loop.create_task(self.queue_handler())
-        self.event_loop.run_forever()
-        self.event_loop.close()
+        await self.project_server.serve_forever()
+        # self.event_loop.run_forever()
+        # self.event_loop.close()
         
-    def stop(self):
-        os.kill(self.process.pid, signal.SIGTERM)
-        self.process.join()
-        logger.info('ws process joined')
+
         
     def ask_exit(self):
         #self.event_loop.call_soon_threadsafe(self.queue_task.cancel)
-        self.event_loop.call_soon_threadsafe(self.project_server.ws_server.close)
+        self.event_loop.call_soon_threadsafe(self.project_server.close)
         logger.info('ws server closing')
         asyncio.run_coroutine_threadsafe(self.stop_async(), self.event_loop)
               
 
     async def stop_async(self):
-        await self.project_server.ws_server.wait_closed()
+        await self.project_server.wait_closed()
         logger.info('ws server closed')
         self.event_loop.call_soon(self.event_loop.stop)
         logger.info('event loop stoped')
@@ -115,10 +110,9 @@ class CuemsWsServer():
             self.engine_messages.append(item)
                     
 
-    async def connection_handler(self, websocket, path):
-        
-        logger.info("new connection: {}, path: {}".format(websocket, path))
-
+    async def connection_handler(self, websocket):
+        logger.info("new connection: {}, path: {}".format(websocket.remote_address, websocket.request.path))
+        path = websocket.request.path
         if (path == '/' or path[0:9] == '/?session'):                                    # project manager
             await self.project_manager_session(websocket, path)
         elif path == '/upload':                            # file upload
@@ -225,7 +219,8 @@ class CuemsWsServer():
     async def notify_users(self, type):
         if self.users:  # asyncio.wait doesn't accept an empty dcit
             message = self.users_event(type)
-            await asyncio.wait([user.outgoing.put(message) for user in self.users])
+            for user in self.users:
+                await user.outgoing.put(message)
 
 
 
