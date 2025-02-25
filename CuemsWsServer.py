@@ -13,13 +13,14 @@ import re
 
 from ..log import *
 
+
 from .CuemsProjectManager import CuemsDBManager
 from .CuemsWsUser import CuemsWsUser
 from .CuemsUpload import CuemsUpload
 from .CuemsErrors import *
 
 
-
+from ..ComunicatorServices import Comunicator
 
 
 formatter = logging.Formatter('Cuems:ws-server: %(levelname)s (PID: %(process)d)-%(threadName)-9s)-(%(funcName)s) %(message)s')
@@ -39,8 +40,8 @@ logger_ws.setLevel(logging.WARNING)  # websockets debug level,  in debug prints 
 class CuemsWsServer():
     
     def __init__(self, engine_queue, editor_queue, settings_dict, mappings_dict ):
-        self.editor_queue = editor_queue
-        self.engine_queue = engine_queue
+        self.engine_comunicator = Comunicator(address="ipc:///tmp/test1.sock")  
+        #self.engine_queue = Comunicator(address="ipc:///tmp/test2.sock")
         self.engine_messages = list()
         self.users = dict()
         self.sessions = dict()
@@ -75,7 +76,6 @@ class CuemsWsServer():
         for sig in (signal.SIGINT, signal.SIGTERM):
             self.event_loop.add_signal_handler(sig, self.ask_exit)
         logger.info('server listening on {}, port {}'.format(self.host, self.port))
-        self.queue_task = self.event_loop.create_task(self.queue_handler())
         await self.project_server.serve_forever()
         # self.event_loop.run_forever()
         # self.event_loop.close()
@@ -95,20 +95,8 @@ class CuemsWsServer():
         self.event_loop.call_soon(self.event_loop.stop)
         logger.info('event loop stoped')
     
-    async def async_get(self):
 
-        """ Calls q.get() in a separate Thread. 
-        q.get is an I/O call, so it should release the GIL.
-        """
-        return (await self.event_loop.run_in_executor(concurrent.futures.ThreadPoolExecutor(thread_name_prefix='ws_QueueGet_ThreadPoolExecutor', max_workers=2), 
-                                           self.editor_queue.get))
 
-    async def queue_handler(self):
-        while True:
-            item = await self.async_get()
-            logger.debug(f'Received queue message from engine {item}')
-            self.engine_messages.append(item)
-                    
 
     async def connection_handler(self, websocket):
         logger.info("new connection: {}, path: {}".format(websocket.remote_address, websocket.request.path))

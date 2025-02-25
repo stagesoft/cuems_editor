@@ -115,28 +115,25 @@ class CuemsWsUser():
             await self.outgoing.put(json.dumps({"type": "error", "uuid": uuid, "action": action, "value": msg}))
 
     async def comunicate_with_engine(self, action, action_uuid, engine_command):
-        try: 
-            await self.server.event_loop.run_in_executor(self.server.executor, self.server.engine_queue.put, engine_command)
-
+        try:
+            try:
+                response = await self.server.engine_comunicator.send_request(engine_command)
+            except Exception as e:
+                raise EngineError(f'can not connect to engine: {e}')
             start_time = datetime.now()
             while True:
                 time_delta = datetime.now() - start_time
                 if time_delta.total_seconds() >= 30: #TODO: decide timeout, or get it from settings?
                     raise TimeoutError(f'Timeout waiting {action} response from engine')
-                if self.server.engine_messages:
-                    for message in list(self.server.engine_messages): #iterate over a copy, so we can remove from the original, (bad idea to modify original while iterating over it)
-                        if "action_uuid" in message:
-                            if action_uuid in message['action_uuid']:
-                                self.server.engine_messages.remove(message)
-                                if 'type'  not in message:
-                                    raise EngineError(f'Engine reports error {message}')
-                                if message['type'] != action or message['value'] != 'OK':
-                                    raise EngineError(f'Engine reports error {message}')
-                                return message['value']
-                    else:
-                        await asyncio.sleep(0.25)
-                        continue
-                    break
+                if response:
+                    
+                        if "action_uuid" in response:
+                            if action_uuid in response['action_uuid']:
+                                if 'type'  not in response:
+                                    raise EngineError(f'Engine reports error {response}')
+                                if response['type'] != action or response['value'] != 'OK':
+                                    raise EngineError(f'Engine reports error {response}')
+                                return response['value']
                 
                 await asyncio.sleep(0.25)
 
