@@ -7,7 +7,7 @@ from ..log import logger
 
 
 def date_now_iso_utc():
-    return datetime.datetime.utcnow().isoformat()
+    return datetime.datetime.now(datetime.timezone.utc).isoformat()
 
 
 class StringSanitizer():
