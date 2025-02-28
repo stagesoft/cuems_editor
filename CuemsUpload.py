@@ -6,9 +6,10 @@ from random import randint
 import websockets as ws
 
 
-from .CuemsUtils import StringSanitizer
+from cuemsutils.log import logged, Logger
+from cuemsutils.StringSanitizer import StringSanitizer
+
 from .CuemsErrors import *
-from ..log import *
 
 
 
@@ -36,14 +37,14 @@ class CuemsUpload(StringSanitizer):
                 elif isinstance(message, bytes):
                     await self.process_upload_packet(message)
             except (ws.exceptions.ConnectionClosed, ws.exceptions.ConnectionClosedOK, ws.exceptions.ConnectionClosedError):
-                logger.debug('upload connection closed, exiting loop')
+                Logger.debug('upload connection closed, exiting loop')
                 break
 
     async def message_sender(self, message):
         try:
             await self.websocket.send(message)
         except (ws.exceptions.ConnectionClosed, ws.exceptions.ConnectionClosedOK, ws.exceptions.ConnectionClosedError) as e:
-                logger.debug(e)
+                Logger.debug(e)
 
     async def process_upload_message(self, message):
         data = json.loads(message)
@@ -55,13 +56,13 @@ class CuemsUpload(StringSanitizer):
     async def set_upload(self, file_info):
         
         if not os.path.exists(self.media_path):
-            logger.error("upload folder doenst exists")
+            Logger.error("upload folder doenst exists")
             await self.message_sender(json.dumps({'error' : 'upload folder doenst exist', 'fatal': True}))
             return False
         
         self.filename = StringSanitizer.sanitize_file_name(file_info['name'])
         self.tmp_filename = self.filename + '.tmp' + str(randint(100000, 999999))
-        logger.debug('tmp upload path: {}'.format(self.tmp_file_path()))
+        Logger.debug('tmp upload path: {}'.format(self.tmp_file_path()))
 
         if not os.path.exists(self.tmp_file_path()):
             self.filesize = file_info['size']
@@ -69,7 +70,7 @@ class CuemsUpload(StringSanitizer):
             await self.message_sender(json.dumps({"ready" : True}))
         else:
             await self.message_sender(json.dumps({'error' : 'file allready exists', 'fatal': True}))
-            logger.error("file allready exists")
+            Logger.error("file allready exists")
 
     async def process_upload_packet(self, bin_data):
 
@@ -103,11 +104,11 @@ class CuemsUpload(StringSanitizer):
             
             await self.server.event_loop.run_in_executor(self.server.executor, self.server.db.media.new,  self.tmp_file_path(), self.filename)
             self.tmp_filename = None
-            logger.debug('upload completed')
+            Logger.debug('upload completed')
             await self.message_sender(json.dumps({"close" : True}))
             await self.server.notify_others_list_changes(None, "file_list")
         except Exception as e:
-            logger.error("error: {} {}".format(type(e), e))
+            Logger.error("error: {} {}".format(type(e), e))
             await self.message_sender(json.dumps({'error' : 'error saving file', 'fatal': True}))
 
     def check_file_integrity(self, path, original_md5):
@@ -131,6 +132,6 @@ class CuemsUpload(StringSanitizer):
         try:
             if self.tmp_file_path():
                 os.remove(self.tmp_file_path())  # TODO: change to pathlib ?  
-                logger.debug('cleaning tmp upload file on object destruction: ({})'.format(self.tmp_file_path()))
+                Logger.debug('cleaning tmp upload file on object destruction: ({})'.format(self.tmp_file_path()))
         except FileNotFoundError:
             pass

@@ -7,11 +7,15 @@ import uuid as uuid_module
 from enum import Enum, auto
 from peewee import *
 
-from .CuemsUtils import StringSanitizer, CopyMoveVersioned, CuemsLibraryMaintenance, date_now_iso_utc
+
+from cuemsutils.StringSanitizer import StringSanitizer
+from cuemsutils.CopyMoveVersioned import CopyMoveVersioned
+from cuemsutils.CTimecode  import CTimecode
+from cuemsutils.log import logged, Logger
+
+from .CuemsUtils import date_now_iso_utc
 from .CuemsDBModel import Project, Media, ProjectMedia
 from .CuemsErrors import *
-from ..CTimecode import CTimecode
-from ..log import *
 
 
 SCRIPT_FILE_NAME = 'script.xml'

@@ -2,8 +2,7 @@ import os
 import shutil
 import datetime
 import uuid as uuid_module
-from ..log import logger
-
+from cuemsutils.log import logged, Logger
 
 
 def date_now_iso_utc():
@@ -66,7 +65,7 @@ class CopyMoveVersioned():
         
         while True:     
             if not os.path.exists(os.path.join(dest_path, dest_filename)):
-                logger.debug('moving file to: {}'.format(os.path.join(dest_path, dest_filename)))
+                Logger.debug('moving file to: {}'.format(os.path.join(dest_path, dest_filename)))
                 shutil.move( orig_path, os.path.join(dest_path, dest_filename))
                 break
             else:
@@ -81,7 +80,7 @@ class CopyMoveVersioned():
         orig_name = dest_dirname
         while True:     
             if not os.path.exists(os.path.join(dest_path, dest_dirname)):
-                logger.debug('copyin dir to: {}'.format(os.path.join(dest_path, dest_dirname)))
+                Logger.debug('copyin dir to: {}'.format(os.path.join(dest_path, dest_dirname)))
                 shutil.copytree( orig_path, os.path.join(dest_path, dest_dirname))
                 break
             else:

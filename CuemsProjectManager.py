@@ -6,17 +6,13 @@ from random import randint
 import traceback
 
 
+from cuemsutils.log import logged, Logger
+
 from .CuemsDBMedia import CuemsDBMedia
 from .CuemsDBProject import CuemsDBProject
 from .CuemsDBModel import Project, Media, ProjectMedia, database
 from .CuemsErrors import *
-from ..log import *
 
-
-
-pewee_logger = logging.getLogger('peewee')
-
-pewee_logger.setLevel(logging.INFO)
 
 
 
@@ -34,7 +30,7 @@ class CuemsDBManager():
             self.db_name = settings_dict['database_name']
             self.tmp_path = settings_dict['tmp_path']
         except KeyError as e:
-            logger.error(f'can not read settings {e}')
+            Logger.error(f'can not read settings {e}')
             raise e
 
         self.xsd_path = SCRIPT_SCHEMA_FILE_PATH
@@ -42,12 +38,12 @@ class CuemsDBManager():
         self.models = [Project, Media,  ProjectMedia]
         database.init(self.db_path)
         database.connect()
-        logger.debug(f'database connected {database}, {self.db_name}')
+        Logger.debug(f'database connected {database}, {self.db_name}')
         for model in self.models:
             if database.table_exists(model._meta.table): # pylint: disable=maybe-no-member
                 continue
             else:
-                logger.warning(f'table "{model._meta.table_name	}" does not exist, creating') # pylint: disable=maybe-no-member
+                Logger.warning(f'table "{model._meta.table_name	}" does not exist, creating') # pylint: disable=maybe-no-member
         # safe=True uses IF NOT EXIST on table create
         database.create_tables( self.models, safe=True) 
         self.project = CuemsDBProject(self.library_path, self.xsd_path, database)

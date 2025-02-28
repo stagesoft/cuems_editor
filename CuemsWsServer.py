@@ -11,7 +11,8 @@ from hashlib import md5
 import uuid as uuid_module
 import re
 
-from ..log import *
+from cuemsutils.log import logged, Logger
+
 
 
 from .CuemsProjectManager import CuemsDBManager
@@ -23,23 +24,9 @@ from .CuemsErrors import *
 from ..ComunicatorServices import Comunicator
 
 
-formatter = logging.Formatter('Cuems:ws-server: %(levelname)s (PID: %(process)d)-%(threadName)-9s)-(%(funcName)s) %(message)s')
-
-
-logger_ws_server = logging.getLogger('ws-server')
-logger_ws_server.setLevel(logging.DEBUG)
-handler.setFormatter(formatter)
-
-logger_asyncio = logging.getLogger('asyncio')
-logger_asyncio.setLevel(logging.WARNING)  # asyncio debug level 
-
-logger_ws = logging.getLogger('websockets')
-logger_ws.setLevel(logging.WARNING)  # websockets debug level,  in debug prints all frames, also binary frames! 
-
-
 class CuemsWsServer():
     
-    def __init__(self, engine_queue, editor_queue, settings_dict, mappings_dict ):
+    def __init__(self, settings_dict, mappings_dict ):
         self.engine_comunicator = Comunicator(address="ipc:///tmp/test1.sock")  
         #self.engine_queue = Comunicator(address="ipc:///tmp/test2.sock")
         self.engine_messages = list()
@@ -52,12 +39,12 @@ class CuemsWsServer():
             self.session_uuid = self.settings_dict['session_uuid']
             self.library_path = self.settings_dict['library_path']
         except KeyError as e:
-            logger.error(f'can not read settings {e}')
+            Logger.error(f'can not read settings {e}')
             raise e
-        logger.debug(f'library path set to : {self.library_path}')
+        Logger.debug(f'library path set to : {self.library_path}')
 
         if (not os.path.exists(self.tmp_path)) or ( not os.access(self.tmp_path,  os.X_OK & os.R_OK & os.W_OK)):
-            logger.error("error: upload folder is not usable")
+            Logger.error("error: upload folder is not usable")
             raise FileNotFoundError('Can not access upload folder')
 
 
@@ -74,39 +61,39 @@ class CuemsWsServer():
         #self.event_loop.set_exception_handler(self.exception_handler) ### TODO:UNCOMENT FOR PRODUCTION 
         self.project_server = await serve(self.connection_handler, self.host, self.port) 
         for sig in (signal.SIGINT, signal.SIGTERM):
-            self.event_loop.add_signal_handler(sig, self.ask_exit)
-        logger.info('server listening on {}, port {}'.format(self.host, self.port))
+            self.event_loop.add_signal_handler(sig, self.stop)
+        Logger.info('server listening on {}, port {}'.format(self.host, self.port))
         await self.project_server.serve_forever()
         # self.event_loop.run_forever()
         # self.event_loop.close()
         
 
         
-    def ask_exit(self):
+    def stop(self):
         #self.event_loop.call_soon_threadsafe(self.queue_task.cancel)
         self.event_loop.call_soon_threadsafe(self.project_server.close)
-        logger.info('ws server closing')
+        Logger.info('ws server closing')
         asyncio.run_coroutine_threadsafe(self.stop_async(), self.event_loop)
               
 
     async def stop_async(self):
         await self.project_server.wait_closed()
-        logger.info('ws server closed')
+        Logger.info('ws server closed')
         self.event_loop.call_soon(self.event_loop.stop)
-        logger.info('event loop stoped')
+        Logger.info('event loop stoped')
     
 
 
 
     async def connection_handler(self, websocket):
-        logger.info("new connection: {}, path: {}".format(websocket.remote_address, websocket.request.path))
+        Logger.info("new connection: {}, path: {}".format(websocket.remote_address, websocket.request.path))
         path = websocket.request.path
         if (path == '/' or path[0:9] == '/?session'):                                    # project manager
             await self.project_manager_session(websocket, path)
         elif path == '/upload':                            # file upload
             await self.upload_session(websocket)
         else:
-            logger.info("unknow path: {}".format(path))
+            Logger.info("unknow path: {}".format(path))
 
     async def project_manager_session(self, websocket, path):
         user_session = CuemsWsUser(self, websocket)
@@ -127,13 +114,13 @@ class CuemsWsServer():
 
     async def upload_session(self, websocket):
         user_upload_session = CuemsUpload(self, websocket)
-        logger.info("new upload session: {}".format(user_upload_session))
+        Logger.info("new upload session: {}".format(user_upload_session))
 
         await user_upload_session.message_handler()
-        logger.info("upload session ended: {}".format(user_upload_session))
+        Logger.info("upload session ended: {}".format(user_upload_session))
 
     async def register(self, user_session, path):
-        logger.info("user registered: {}".format(id(user_session.websocket)))
+        Logger.info("user registered: {}".format(id(user_session.websocket)))
         self.users[user_session] = None
         await self.notify_users("users")
         user_session.session_id =  await self.check_session(user_session, path)
@@ -146,10 +133,10 @@ class CuemsWsServer():
             if (matches.groupdict()['uuid'] != None):
                 uuid = matches.groupdict()['uuid']
                 if uuid  not in self.sessions:
-                    logger.debug(f"uuid not found {uuid}, creating new session")
+                    Logger.debug(f"uuid not found {uuid}, creating new session")
                     uuid = str(uuid_module.uuid1())
                 else:
-                    logger.debug(f"session_id found, reusing {uuid}")
+                    Logger.debug(f"session_id found, reusing {uuid}")
             else:
                 uuid = str(uuid_module.uuid1())
         else:
@@ -175,7 +162,7 @@ class CuemsWsServer():
         await user_session.outgoing.put(message)
 
     async def unregister(self, user_task):
-        logger.info("user unregistered: {}".format(id(user_task.websocket)))
+        Logger.info("user unregistered: {}".format(id(user_task.websocket)))
         self.users.pop(user_task, None)
         await self.notify_users("users")
 
@@ -186,7 +173,7 @@ class CuemsWsServer():
             for user, project in self.users.items():
                 if user is not calling_user:
                     await user.outgoing.put(message)
-                    logger.debug('notifing {} {}'.format(user, list_type))
+                    Logger.debug('notifing {} {}'.format(user, list_type))
             
     async def notify_others_same_project(self, calling_user, msg_type, project_uuid=None):
         if self.users:  #notify others, not the user trigering the action, and only if the have same project loaded
@@ -200,9 +187,9 @@ class CuemsWsServer():
                         if str(project) != str(self.users[calling_user]):
                             continue
 
-                    logger.debug('same project loaded')
+                    Logger.debug('same project loaded')
                     await user.outgoing.put(message)
-                    logger.debug('notifing {}'.format(user))
+                    Logger.debug('notifing {}'.format(user))
     
     async def notify_users(self, type):
         if self.users:  # asyncio.wait doesn't accept an empty dcit
@@ -224,5 +211,5 @@ class CuemsWsServer():
             return json.dumps({"type": type, "uuid": uuid, "value" : "modified in server"}) # TODO: not used
 
     def exception_handler(self, loop, context):
-        logger.debug("Caught the following exception: (ignore if on closing)")
-        logger.debug(context['message'])
+        Logger.debug("Caught the following exception: (ignore if on closing)")
+        Logger.debug(context['message'])
