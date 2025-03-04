@@ -3,7 +3,6 @@ alsa-midi==1.0.2
 asttokens==3.0.0
 cffi==1.17.1
 comm==0.2.2
-cuemsutils==0.0.3.post2
 debugpy==1.8.9
 decorator==5.1.1
 elementpath==4.6.0
