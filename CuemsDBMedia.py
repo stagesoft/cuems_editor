@@ -58,7 +58,7 @@ class CuemsDBMedia(StringSanitizer):
                 try:
                     _type = self.get_type(dest_filename)
                 except Exception as e:
-                    logger.warning(f'could not get media type; error : {e}')
+                    Logger.warning(f'could not get media type; error : {e}')
                     _type = None
                     raise e
 
@@ -68,7 +68,7 @@ class CuemsDBMedia(StringSanitizer):
                     else:
                         media_duration = None
                 except Exception as e:
-                    logger.warning(f'could not get media duration; error : {e}')
+                    Logger.warning(f'could not get media duration; error : {e}')
                     media_duration = None
 
                 try:
@@ -84,13 +84,13 @@ class CuemsDBMedia(StringSanitizer):
                         dest_thumbnail_filename = None
                         dest_thumbnail_filename = self.create_video_thubnail(dest_filename, None)
                 except Exception as e:
-                    logger.exception(f'could not generate {_type} thumbnail or waveform; error : {e}')
+                    Logger.exception(f'could not generate {_type} thumbnail or waveform; error : {e}')
                     media_thumbnail_binary_data = None
 
                     
                 Media.create(uuid=uuid_module.uuid1(), name=dest_filename, unix_name=dest_filename, created=date_now_iso_utc(), modified=date_now_iso_utc(), duration=media_duration, media_type=_type.name, in_trash=False)
             except Exception as e:
-                logger.error("error: {} {} triying to move new file, rolling back database insert".format(type(e), e))
+                Logger.error("error: {} {} triying to move new file, rolling back database insert".format(type(e), e))
                 transaction.rollback()
                 if dest_filename is None and dest_thumbnail_filename is None:  # if move or copy where not sucessfull we dont need to clean and can end here forwarding the exception, else continue cleaning and then forward the exception
                     if _type is MediaType.AUDIO:
@@ -151,7 +151,7 @@ class CuemsDBMedia(StringSanitizer):
                     media.update(name=StringSanitizer.sanitize_name(data['uuid']['name']), description=StringSanitizer.sanitize_text_size(data['uuid']['description']), modified=date_now_iso_utc()).execute()
                     return 'updated'
                 except Exception as e:
-                    logger.error("error: {} {} triying to update  media data, rolling back database update".format(type(e), e))
+                    Logger.error("error: {} {} triying to update  media data, rolling back database update".format(type(e), e))
                     transaction.rollback()
                     raise e
             
@@ -224,7 +224,7 @@ class CuemsDBMedia(StringSanitizer):
                         if os.path.exists(file_thumbnail_path):
                             dest_thumbnail_filename = CopyMoveVersioned.move(file_thumbnail_path, self.thumbnail_trash_path)
                     except Exception as e:
-                        logger.error("error: {} {}; triying to move thumbnail to trash".format(type(e), e))
+                        Logger.error("error: {} {}; triying to move thumbnail to trash".format(type(e), e))
                         raise e
 
                     if self.is_audio(media):
@@ -234,15 +234,15 @@ class CuemsDBMedia(StringSanitizer):
                             if os.path.exists(file_waveform_path):
                                 dest_waveform_filename = CopyMoveVersioned.move(file_waveform_path, self.waveform_trash_path)
                         except Exception as e:
-                            logger.error("error: {} {}; triying to move waveform to trash".format(type(e), e))
+                            Logger.error("error: {} {}; triying to move waveform to trash".format(type(e), e))
                             raise e
                    
                     dest_filename = CopyMoveVersioned.move(file_path, self.trash_path)
                     media.in_trash = True
                     media.save()
-                    logger.debug('modifing instance in table: {}'.format(media))
+                    Logger.debug('modifing instance in table: {}'.format(media))
                 except Exception as e:
-                    logger.error("error: {} {}; triying to move file to trash, rolling back database".format(type(e), e))
+                    Logger.error("error: {} {}; triying to move file to trash, rolling back database".format(type(e), e))
                     transaction.rollback()
                     # if move or copy where not sucessfull we don't need to clean and can end here forwarding the exception, else continue cleaning and then forward the exception
                     if dest_filename is None & dest_thumbnail_filename is None:
@@ -253,7 +253,7 @@ class CuemsDBMedia(StringSanitizer):
                             raise e
 
                     # check if any file has been moved to trash folder and return it to media folder's
-                    logger.debug("moving files back to media folder")
+                    Logger.debug("moving files back to media folder")
                     if os.path.exists(self.get_file_path(dest_filename, trash_state=True)):
                         shutil.move(self.get_file_path(dest_filename, trash_state=True), self.get_file_path(media.unix_name))
 
@@ -285,7 +285,7 @@ class CuemsDBMedia(StringSanitizer):
                         if os.path.exists(file_thumbnail_path):
                             dest_thumbnail_filename = CopyMoveVersioned.move(file_thumbnail_path, self.thumbnail_path)
                     except Exception as e:
-                        logger.error("error: {} {}; triying to move thumbnail from trash".format(type(e), e))
+                        Logger.error("error: {} {}; triying to move thumbnail from trash".format(type(e), e))
                         raise e
 
                     if self.is_audio(media_trash):
@@ -295,16 +295,16 @@ class CuemsDBMedia(StringSanitizer):
                             if os.path.exists(file_waveform_path):
                                 dest_waveform_filename = CopyMoveVersioned.move(file_waveform_path, self.waveform_path)
                         except Exception as e:
-                            logger.error("error: {} {}; triying to waveform from trash".format(type(e), e))
+                            Logger.error("error: {} {}; triying to waveform from trash".format(type(e), e))
                             raise e
 
                     
                     dest_filename = CopyMoveVersioned.move(file_path, self.media_path)
                     media_trash.in_trash = False
                     media_trash.save()
-                    logger.debug('deleting instance from table: {}'.format(media_trash))
+                    Logger.debug('deleting instance from table: {}'.format(media_trash))
                 except Exception as e:
-                    logger.error("error: {} {}; triying to move file to trash, rolling back database".format(type(e), e))
+                    Logger.error("error: {} {}; triying to move file to trash, rolling back database".format(type(e), e))
                     transaction.rollback()
                     if dest_filename is None and dest_thumbnail_filename is None:  # if move or copy where not sucessfull we dont need to clean and can end here forwarding the exception, else continue cleaning and then forward the exception
                         if self.is_audio(media_trash):
@@ -347,9 +347,9 @@ class CuemsDBMedia(StringSanitizer):
 
                     media.delete_instance(recursive=True)
                     os.remove(file_path)
-                    logger.debug('modifing instance in table: {}'.format(media))
+                    Logger.debug('modifing instance in table: {}'.format(media))
                 except Exception as e:
-                    logger.error("error: {} {}; triying to delete file from trash, rolling back database".format(type(e), e))
+                    Logger.error("error: {} {}; triying to delete file from trash, rolling back database".format(type(e), e))
                     transaction.rollback()
                     raise e
 
