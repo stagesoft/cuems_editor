@@ -39,7 +39,7 @@ logger_ws.setLevel(logging.WARNING)  # websockets debug level,  in debug prints 
 
 class CuemsWsServer():
     
-    def __init__(self, engine_queue, editor_queue, settings_dict, mappings_dict ):
+    def __init__(self, settings_dict, mappings_dict ):
         self.engine_comunicator = Comunicator(address="ipc:///tmp/test1.sock")  
         #self.engine_queue = Comunicator(address="ipc:///tmp/test2.sock")
         self.engine_messages = list()
