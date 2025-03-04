@@ -21,7 +21,7 @@ from .CuemsUpload import CuemsUpload
 from .CuemsErrors import *
 
 
-from ..ComunicatorServices import Comunicator
+from cuemsutils.ComunicatorServices import Comunicator
 
 
 class CuemsWsServer():
