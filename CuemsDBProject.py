@@ -108,7 +108,9 @@ class CuemsDBProject(StringSanitizer):
             try:
                 project = Project.create(uuid=project_uuid, unix_name=unix_name, name=StringSanitizer.sanitize_name(data['CuemsScript']['name']), description=StringSanitizer.sanitize_text_size(data['CuemsScript']['description']), created=now, modified=now)
                 os.mkdir(os.path.join(self.projects_path, unix_name))
+                Logger.debug('data is now: {}'.format(data))
                 project_object = CuemsParser(data).parse()
+                Logger.debug(f'project_object is now: {type(project_object)},{project_object}')
                 self.add_media_relations(project, project_object, data)
                 self.save_xml(unix_name, project_object)
                 return project_uuid
