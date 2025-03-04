@@ -25,7 +25,6 @@ COPY ssl.key /etc/apache2/ssl/ssl.key
 RUN mkdir -p /var/run/apache2/
 RUN mkdir /opt/app/cuems
 COPY ws-server.py /opt/app/
-COPY log.py /usr/local/lib/python3.11/dist-packages/cuemsutils
 COPY docker-entrypoint.sh /usr/local/bin
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 WORKDIR /opt/app
