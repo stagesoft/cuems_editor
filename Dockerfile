@@ -18,7 +18,7 @@ RUN make install
 RUN pip3 install /opt/lib/libossia-bookworm/build/src/ossia-python/dist/pyossia-0+unknown-cp311-cp311-linux_x86_64.whl --break-system-packages
 RUN rm -rf /opt/lib/libossia-bookworm
 RUN apt-get remove gcc cmake build-essential -y
-COPY ./var/www /var/www
+RUN mkdir /var/www
 COPY  cuems-httpd.conf /usr/local/apache2/conf/httpd.conf
 COPY ssl.crt /etc/apache2/ssl/ssl.crt
 COPY ssl.key /etc/apache2/ssl/ssl.key
