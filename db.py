@@ -4,11 +4,10 @@ import time
 import uuid
 
 import random
-import logging
+from cuemsutils.log import Logger
 
-logger = logging.getLogger('peewee')
-logger.addHandler(logging.StreamHandler())
-logger.setLevel(logging.INFO)
+
+Logger.setLevel(logging.INFO)
 
 db = SqliteDatabase('project-manager.db')
 

@@ -84,7 +84,7 @@ class CuemsDBMedia(StringSanitizer):
                         dest_thumbnail_filename = None
                         dest_thumbnail_filename = self.create_video_thubnail(dest_filename, None)
                 except Exception as e:
-                    Logger.exception(f'could not generate {_type} thumbnail or waveform; error : {e}')
+                    Logger.error(f'could not generate {_type} thumbnail or waveform; error : {e}')
                     media_thumbnail_binary_data = None
 
                     

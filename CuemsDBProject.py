@@ -244,8 +244,8 @@ class CuemsDBProject(StringSanitizer):
         remove_set = set(old_media_list).difference(media_list)
         add_set = set(media_list).difference(old_media_list)
 
-        logging.debug('media remove list: {}'.format(remove_set))
-        logging.debug('media add list: {}'.format(add_set))
+        Logger.debug('media remove list: {}'.format(remove_set))
+        Logger.debug('media add list: {}'.format(add_set))
 
         if remove_set:
             for media_unix_name in remove_set:
@@ -259,12 +259,12 @@ class CuemsDBProject(StringSanitizer):
     
     def save_xml(self, unix_name, project_object):
 
-        writer = XmlWriter(schema = self.xsd_path, xmlfile = (os.path.join(self.projects_path, unix_name, SCRIPT_FILE_NAME)))
+        writer = XmlWriter(schema_name = self.xsd_path, xmlfile = (os.path.join(self.projects_path, unix_name, SCRIPT_FILE_NAME)))
         writer.write_from_object(project_object)
 
 
     def load_xml(self, unix_name):
-        reader = XmlReader(schema = self.xsd_path, xmlfile = (os.path.join(self.projects_path, unix_name, SCRIPT_FILE_NAME)))
+        reader = XmlReader(schema_name = self.xsd_path, xmlfile = (os.path.join(self.projects_path, unix_name, SCRIPT_FILE_NAME)))
         return reader.read()
 
             
