@@ -6,7 +6,7 @@ import websockets as ws
 
 from cuemsutils.log import logged, Logger
 
-from .CuemsErrors import *
+from CuemsErrors import *
 
 class CuemsWsUser():
     

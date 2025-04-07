@@ -15,10 +15,10 @@ from cuemsutils.log import logged, Logger
 
 
 
-from .CuemsProjectManager import CuemsDBManager
-from .CuemsWsUser import CuemsWsUser
-from .CuemsUpload import CuemsUpload
-from .CuemsErrors import *
+from CuemsProjectManager import CuemsDBManager
+from CuemsWsUser import CuemsWsUser
+from CuemsUpload import CuemsUpload
+from CuemsErrors import *
 
 
 from cuemsutils.ComunicatorServices import Comunicator

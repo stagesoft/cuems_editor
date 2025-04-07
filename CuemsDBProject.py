@@ -6,14 +6,14 @@ from peewee import DoesNotExist, IntegrityError
 
 from cuemsutils.StringSanitizer import StringSanitizer
 from cuemsutils.CopyMoveVersioned import CopyMoveVersioned
-from cuemsutils.xml.DictParser import CuemsParser
+from cuemsutils.xml.Parsers import CuemsParser
 from cuemsutils.xml.XmlReaderWriter import XmlReader, XmlWriter
 from cuemsutils.log import logged, Logger
 
-from .CuemsUtils import date_now_iso_utc
+from CuemsUtils import date_now_iso_utc
 
-from .CuemsErrors import *
-from .CuemsDBModel import Project, Media, ProjectMedia
+from CuemsErrors import *
+from CuemsDBModel import Project, Media, ProjectMedia
 
 SCRIPT_FILE_NAME = 'script.xml'
 PROJECT_FOLDER_NAME = 'projects'

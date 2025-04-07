@@ -1,6 +1,6 @@
 from peewee import *
 
-from .CuemsUtils import date_now_iso_utc
+from CuemsUtils import date_now_iso_utc
 
 database = SqliteDatabase(None, pragmas={
     'foreign_keys': 1,
