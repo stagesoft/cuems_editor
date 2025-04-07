@@ -113,15 +113,29 @@ class CuemsDBMedia(StringSanitizer):
         media_list = list()
 
         medias = (Media
-         .select(Media.uuid, Media.name, Media.unix_name, Media.created, Media.modified, Media.media_type,
-         fn.COUNT(Case(Project.in_trash, (('0', 1),), None)).alias('in_project_count'),
-         fn.COUNT(Case(Project.in_trash, (('1', 1),), None)).alias('in_project_trash_count'))
-         .join(ProjectMedia, JOIN.LEFT_OUTER)  # Joins tweet -> favorite.
-         .join(Project, JOIN.LEFT_OUTER, on=(Project.uuid==ProjectMedia.project))  # Joins user -> tweet.
-         .where(Media.in_trash==False)
-         .group_by(Media.uuid))
+        .select(Media,
+        fn.COUNT(Case(Project.in_trash, (('0', 1),), None)).alias('in_project_count'),
+        fn.COUNT(Case(Project.in_trash, (('1', 1),), None)).alias('in_project_trash_count'))
+        .join(ProjectMedia, JOIN.LEFT_OUTER)  # Joins tweet -> favorite.
+        .join(Project, JOIN.LEFT_OUTER, on=(Project.uuid==ProjectMedia.project))  # Joins user -> tweet.
+        .where((Media.in_trash==False))
+        .group_by(Media))
+        
+       
+        medias = prefetch(
+                medias,
+                ProjectMedia,
+                Project)
+        
         for media in medias:
-            media_dict = {str(media.uuid): {'name': media.name, 'unix_name': media.unix_name, 'created': media.created, 'modified': media.modified,  'type': media.media_type, "in_projects": media.in_project_count, "in_trash_projects" : media.in_project_trash_count} }
+            project_list = []  # Reset list for each media item
+            # Create a dictionary for each project inside the media item
+            for project in media.projects():
+                project_dict = {'uuid': str(project.uuid), 'name': project.name, 'in_trash': project.in_trash}
+                project_list.append(project_dict)
+
+            # Create a dictionary for each media item
+            media_dict = {str(media.uuid): {'name': media.name, 'unix_name': media.unix_name, 'created': media.created, 'modified': media.modified,  'type': media.media_type, "in_projects": media.in_project_count, "in_projects_list": project_list, "in_trash_projects" : media.in_project_trash_count} }
             media_list.append(media_dict)
 
         return media_list
