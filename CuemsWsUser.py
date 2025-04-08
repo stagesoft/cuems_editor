@@ -57,6 +57,8 @@ class CuemsWsUser():
                     await self.hw_discovery(data["action"])
                 elif data["action"] == "project_deploy":
                     await self.project_deploy(data["value"], data["action"])
+                elif data["action"] == "project_new":
+                    await self.received_new_project(data["value"], data["action"], data["unix_name"])
                 elif data["action"] == "project_save":
                     await self.received_project(data["value"], data["action"])
                 elif data["action"] == "project_delete":
@@ -210,23 +212,26 @@ class CuemsWsUser():
             Logger.error("error: {} {}".format(type(e), e))
             await self.notify_error_to_user(str(e), uuid=project_uuid, action=action )
 
+
+    async def received_new_project(self, data, action, unix_name):
+        try:
+
+            project_uuid = await self.server.event_loop.run_in_executor(self.server.executor, self.new_project, data, unix_name)
+            
+            Logger.info("user {} new project {}".format(id(self.websocket), project_uuid))
+            
+            self.server.users[self] = project_uuid
+            await self.notify_user(uuid=project_uuid, action=action)
+            await self.server.notify_others_list_changes(self, "project_list")
+            await self.server.notify_others_same_project(self, "project_modified", project_uuid)
+        except Exception as e:
+            Logger.error("error: {} {}".format(type(e), e))
+            await self.notify_error_to_user((str(type(e)) + str(e)), uuid=project_uuid, action="project_new")
     async def received_project(self, data, action):
         try:
-            project_uuid = None
-            new_project = False
 
-            try:
-                project_uuid = data['CuemsScript']['uuid']
-                if project_uuid in ('', 'null', None):
-                    new_project = True
-            except KeyError:
-                new_project = True
-
-            if new_project:
-                project_uuid = await self.server.event_loop.run_in_executor(self.server.executor, self.new_project, data)
-            else:
-                await self.server.event_loop.run_in_executor(self.server.executor, self.update_project, project_uuid, data)
-
+            project_uuid = data['CuemsScript']['uuid']
+            await self.server.event_loop.run_in_executor(self.server.executor, self.update_project, project_uuid, data)
             Logger.info("user {} saving project {}".format(id(self.websocket), project_uuid))
             
             
@@ -236,7 +241,7 @@ class CuemsWsUser():
             await self.server.notify_others_same_project(self, "project_modified", project_uuid)
         except Exception as e:
             Logger.error("error: {} {}".format(type(e), e))
-            await self.notify_error_to_user((str(type(e)) + str(e)), uuid=project_uuid, action="project_save")
+            await self.notify_error_to_user((str(type(e)) + str(e)), uuid=project_uuid, action=action)
 
     async def list_project_trash(self, action):
         Logger.info("user {} loading project trash list".format(id(self.websocket)))
@@ -435,9 +440,9 @@ class CuemsWsUser():
         Logger.info("loading project: {}".format(project_uuid))
         return self.server.db.project.load(project_uuid)
 
-    def new_project(self, data):
-        Logger.debug('saving new project, data:{}'.format(data))
-        return self.server.db.project.new(data)
+    def new_project(self, data, unix_name):
+        Logger.debug('saving new project, data:{}, unix_name{}'.format(data, unix_name))
+        return self.server.db.project.new(data, unix_name)
 
     def update_project(self, project_uuid, data):
         Logger.debug('saving project, uuid:{}, data:{}'.format(project_uuid, data))

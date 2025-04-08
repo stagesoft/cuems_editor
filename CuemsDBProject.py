@@ -92,10 +92,10 @@ class CuemsDBProject(StringSanitizer):
             
         
 
-    def new(self, data):
+    def new(self, data, unix_name):
+
         try:
-            unix_name = StringSanitizer.sanitize_dir_permit_increment(data['CuemsScript']['unix_name'])
-            del data['CuemsScript']['unix_name']
+            unix_name = StringSanitizer.sanitize_dir_permit_increment(unix_name)
         except KeyError as e:
             raise e
         
