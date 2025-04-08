@@ -98,6 +98,7 @@ class CuemsWsServer():
     async def project_manager_session(self, websocket, path):
         user_session = CuemsWsUser(self, websocket)
         await self.register(user_session, path)
+        await user_session.outgoing.put(self.initial_json_template())
         await user_session.outgoing.put(self.initial_setting_message())
         try:
             consumer_task = asyncio.create_task(user_session.consumer_handler())
@@ -200,6 +201,13 @@ class CuemsWsServer():
 
 
     # warning, these non async functions should be not blocking or user @sync_to_async to get their own thread
+  
+
+    # send initial json template to the client
+    def initial_json_template(self):
+        return json.dumps({"type": "initial_mappings", "value": self.mappings_dict })
+
+  
     def initial_setting_message(self):
         return json.dumps({"type": "initial_mappings", "value": self.mappings_dict })
 
