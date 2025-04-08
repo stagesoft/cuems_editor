@@ -18,12 +18,13 @@ Commands 													 ->	Responses
 {"action" : "project_ready", "value" : "project_uuid"}   		->  {"type": "project_ready", "value": "project_uuid"}
 {"action" : "project_deploy", "value" : "project_uuid"}   		->  {"type": "project_deploy", "value": "project_uuid"}
 
+{"action" : "project_new", "value" : "project_json", "unix_name" : "unix_name_string"}   		->  {"type": "project_save", "value": "project_uuid"}
 {"action" : "project_save", "value" : "project_json"}   		->  {"type": "project_save", "value": "project_uuid"}
 {"action" : "project_delete", "value" : "project_uuid"} 		->  {"type": "project_delete", "value": "project_uuid"}
 {"action" : "project_trash_list"}  							 	->  {"type": "project_trash_list", "value": "project_trash_list_json"}
 {"action" : "project_restore", "value" : "project_uuid"}  		->  {"type": "project_recover", "value": "project_uuid"}
 {"action" : "project_trash_delete", "value" : "project_uuid"}	->  {"type": "project_trash_delete", "value": "project_uuid"}
-{"action" : "project_duplicate", "value" : "project_uuid"}		->  {"type": "project_duplicate", "value": {"uuid": "project_uuid", "new_uuid": "duplicated_project_uuid" }
+{"action" : "project_duplicate", "value" : "project_uuid"}		->  {"type": "project_duplicate", "value": {"uuid": "project_uuid", "new_uuid": "duplicated_project_uuid" }}
 
 {"action" : "file_list"}  										->  {"type": "file_list", "value": "file_list_json"}
 {"action" : "file_load_meta", "value" : "file_uuid"}  			->  {"type": "file_load_meta", "value": "file_metadata_json"}
@@ -45,6 +46,7 @@ Error responses
 				->	{"type": "error", "action": "project_ready", "uuid": "project_uuid", "value": "error_msg"}
 				->	{"type": "error", "action": "project_deploy", "uuid": "project_uuid", "value": "error_msg"}
 				->	{"type": "error", "action": "project_load", "uuid": "project_uuid", value": "error_msg"}
+				->	{"type": "error", "action": "project_new", "value": "error_msg"}
 				->	{"type": "error", "action": "project_save", "uuid": "project_uuid", value": "error_msg"}
 				->	{"type": "error", "action": "project_delete", "uuid": "project_uuid", value": "error_msg"}
 				->	{"type": "error", "action": "project_trash_list", "value": "error_msg"}

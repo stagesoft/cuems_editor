@@ -226,7 +226,7 @@ class CuemsWsUser():
             await self.server.notify_others_same_project(self, "project_modified", project_uuid)
         except Exception as e:
             Logger.error("error: {} {}".format(type(e), e))
-            await self.notify_error_to_user((str(type(e)) + str(e)), uuid=project_uuid, action="project_new")
+            await self.notify_error_to_user((str(type(e)) + str(e)), action="project_new")
     async def received_project(self, data, action):
         try:
 
