@@ -230,7 +230,7 @@ class CuemsWsUser():
     async def received_project(self, data, action):
         try:
 
-            project_uuid = data['CuemsScript']['uuid']
+            project_uuid = data['CuemsScript']['id']
             await self.server.event_loop.run_in_executor(self.server.executor, self.update_project, project_uuid, data)
             Logger.info("user {} saving project {}".format(id(self.websocket), project_uuid))
             
