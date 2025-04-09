@@ -13,13 +13,13 @@ import re
 
 from cuemsutils.log import logged, Logger
 
+from create_dummy import create_dummy_script
 
 
 from CuemsProjectManager import CuemsDBManager
 from CuemsWsUser import CuemsWsUser
 from CuemsUpload import CuemsUpload
 from CuemsErrors import *
-
 
 from cuemsutils.ComunicatorServices import Comunicator
 
@@ -205,7 +205,9 @@ class CuemsWsServer():
 
     # send initial json template to the client
     def initial_json_template(self):
-        return json.dumps({"type": "initial_mappings", "value": self.mappings_dict })
+        initial_template = create_dummy_script()
+
+        return json.dumps({"type": "initial_template", "value": {"CuemsScript": initial_template}}) 
 
   
     def initial_setting_message(self):
