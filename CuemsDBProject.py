@@ -101,7 +101,7 @@ class CuemsDBProject(StringSanitizer):
         
         try:
             project_uuid = str(uuid_module.uuid1())
-            data['CuemsScript']['uuid']= project_uuid
+            data['CuemsScript']['id']= project_uuid
             now = date_now_iso_utc()
             data['CuemsScript']['created'] = now
             data['CuemsScript']['modified'] = now
