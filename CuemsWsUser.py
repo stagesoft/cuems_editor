@@ -94,6 +94,9 @@ class CuemsWsUser():
                 else:
                     Logger.error("unsupported action: {}".format(data))
                     await self.notify_error_to_user("unsupported action: {}".format(data))
+            except KeyError as e:
+                Logger.error("error missing key:  {}".format(e))
+                await self.notify_error_to_user('error missing key {} in request'.format(e))
             except Exception as e:
                 Logger.error("error: {} {}".format(type(e), e))
                 await self.notify_error_to_user('error processing request')

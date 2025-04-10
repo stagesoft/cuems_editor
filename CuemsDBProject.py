@@ -96,14 +96,22 @@ class CuemsDBProject(StringSanitizer):
 
         try:
             unix_name = StringSanitizer.sanitize_dir_permit_increment(unix_name)
-        except KeyError as e:
+        except Exception as e:
             raise e
         
-        project_uuid = str(uuid_module.uuid1())
-        data['CuemsScript']['uuid']= project_uuid
-        now = date_now_iso_utc()
-        data['CuemsScript']['created'] = now
-        data['CuemsScript']['modified'] = now
+        try:
+            project_uuid = str(uuid_module.uuid1())
+            data['CuemsScript']['uuid']= project_uuid
+            now = date_now_iso_utc()
+            data['CuemsScript']['created'] = now
+            data['CuemsScript']['modified'] = now
+        except KeyError as e:
+            Logger.error("error: Missing {} ;triying to make new  project, rolling back database insert".format(e))
+            raise e
+        except Exception as e:
+            Logger.error("error: {} {} ;triying to read  project data".format(type(e), e))
+            raise e
+
         with self.db.atomic() as transaction:
             try:
                 project = Project.create(uuid=project_uuid, unix_name=unix_name, name=StringSanitizer.sanitize_name(data['CuemsScript']['name']), description=StringSanitizer.sanitize_text_size(data['CuemsScript']['description']), created=now, modified=now)
