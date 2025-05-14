@@ -8,12 +8,12 @@ database = SqliteDatabase(None, pragmas={
 
 
 # TODO: discuss this; WAL mode is faster  but creates 3 files instead of 1, does not need synchonous=2 to mantain database integrity
-""" database = SqliteDatabase(None, pragmas={
-    'journal_mode': 'wal',
-    'cache_size': -1 * 4000,  # 4MB
-    'foreign_keys': 1,
-    'ignore_check_constraints': 0,
-    'synchronous': 1}) """
+# database = SqliteDatabase(None, pragmas={
+#     'journal_mode': 'wal',
+#     'cache_size': -1 * 4000,  # 4MB
+#     'foreign_keys': 1,
+#     'ignore_check_constraints': 0,
+#     'synchronous': 1})
 
 
 class CuemsBaseModel(Model):

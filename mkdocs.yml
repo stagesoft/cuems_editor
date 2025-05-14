@@ -1,0 +1,9 @@
+site_name: Cuems Editor - FormitGo frontend and backend
+repo_url: https://github.com/cuems/cuems-editor
+theme:
+  name: material
+
+plugins:
+  - search
+  - mkdocstrings:
+      default_handler: python
