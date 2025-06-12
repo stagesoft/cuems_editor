@@ -3,7 +3,7 @@ from cuemsutils.cues.MediaCue import Media, Region
 from cuemsutils.cues.CueOutput import AudioCueOutput, VideoCueOutput
 def create_dummy_script():
     target_uuid = '1f301cf8-dd03-4b40-ac17-ef0e5e7988be'
-    act = ActionCue({'loop': 0, 'action_target': target_uuid, 'action_type': 'play'})
+    act = ActionCue({'loop': 0, 'action_target': target_uuid, 'action_type': 'play', 'ui_properties' : {'warning' : 0}})
     ac = AudioCue({
         'master_vol': 66,
         'Media': Media({
@@ -16,7 +16,10 @@ def create_dummy_script():
                     'out_time': None
                 })
             ]
-        })
+        }),
+        'ui_properties' : {
+            'warning': None
+            }
     })
     vc = VideoCue({
         'loop': 0,
@@ -27,7 +30,10 @@ def create_dummy_script():
                     'id': 0, 'loop': 1, 'in_time': None, 'out_time': None
                 })
             ]
-        })
+        }),
+        'ui_properties' : {
+            'warning': None
+            }
     })
     ac.outputs = [AudioCueOutput({
                                         "output_name": "0367f391-ebf4-48b2-9f26-000000000001_system:playback_1",
@@ -87,4 +93,7 @@ def create_dummy_script():
     script.cuelist['contents'][0]['id'] = None
     script.cuelist['contents'][1]['id'] = None
     script.cuelist['contents'][2]['id'] = None
+    script['ui_properties'] = {
+        'warning': 0,
+    }
     return script
