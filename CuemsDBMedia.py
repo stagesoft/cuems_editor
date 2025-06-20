@@ -12,8 +12,8 @@ from cuemsutils.StringSanitizer import StringSanitizer
 from cuemsutils.CopyMoveVersioned import CopyMoveVersioned
 from cuemsutils.CTimecode  import CTimecode
 from cuemsutils.log import logged, Logger
+from cuemsutils.helpers import new_datetime
 
-from CuemsUtils import date_now_iso_utc
 from CuemsDBModel import Project, Media, ProjectMedia
 from CuemsErrors import *
 
@@ -88,7 +88,7 @@ class CuemsDBMedia(StringSanitizer):
                     media_thumbnail_binary_data = None
 
                     
-                Media.create(uuid=uuid_module.uuid1(), name=dest_filename, unix_name=dest_filename, created=date_now_iso_utc(), modified=date_now_iso_utc(), duration=media_duration, media_type=_type.name, in_trash=False)
+                Media.create(uuid=uuid_module.uuid1(), name=dest_filename, unix_name=dest_filename, created=new_datetime(), modified=new_datetime(), duration=media_duration, media_type=_type.name, in_trash=False)
             except Exception as e:
                 Logger.error("error: {} {} triying to move new file, rolling back database insert".format(type(e), e))
                 transaction.rollback()
@@ -162,7 +162,7 @@ class CuemsDBMedia(StringSanitizer):
             media = Media.get((Media.uuid==uuid) & (Media.in_trash == False))
             with self.db.atomic() as transaction:
                 try:
-                    media.update(name=StringSanitizer.sanitize_name(data['uuid']['name']), description=StringSanitizer.sanitize_text_size(data['uuid']['description']), modified=date_now_iso_utc()).execute()
+                    media.update(name=StringSanitizer.sanitize_name(data['uuid']['name']), description=StringSanitizer.sanitize_text_size(data['uuid']['description']), modified=new_datetime()).execute()
                     return 'updated'
                 except Exception as e:
                     Logger.error("error: {} {} triying to update  media data, rolling back database update".format(type(e), e))

@@ -1,6 +1,6 @@
 from peewee import *
 
-from CuemsUtils import date_now_iso_utc
+from cuemsutils.helpers import new_datetime
 
 database = SqliteDatabase(None, pragmas={
     'foreign_keys': 1,
@@ -25,8 +25,8 @@ class Project(CuemsBaseModel):
     name = CharField(unique = True)
     unix_name = CharField(unique = True)
     description = TextField(null = True) #TODO: define maxsize
-    created = DateTimeField(default=date_now_iso_utc())
-    modified = DateTimeField(default=date_now_iso_utc())
+    created = DateTimeField(default=new_datetime())
+    modified = DateTimeField(default=new_datetime())
     in_trash = BooleanField(default=False)
 
     @staticmethod
@@ -50,8 +50,8 @@ class Media(CuemsBaseModel):
     name = CharField(unique = True)
     unix_name = CharField(unique = True)
     description = TextField(null = True) #TODO: define maxsize
-    created = DateTimeField(default=date_now_iso_utc())
-    modified = DateTimeField(default=date_now_iso_utc())
+    created = DateTimeField(default=new_datetime())
+    modified = DateTimeField(default=new_datetime())
     duration = CharField(null = True)
     media_type = CharField()
     in_trash = BooleanField(default=False)

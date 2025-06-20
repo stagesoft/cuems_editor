@@ -7,10 +7,10 @@ from peewee import DoesNotExist, IntegrityError
 from cuemsutils.StringSanitizer import StringSanitizer
 from cuemsutils.CopyMoveVersioned import CopyMoveVersioned
 from cuemsutils.xml.Parsers import CuemsParser
-from cuemsutils.xml.XmlReaderWriter import XmlReader, XmlWriter
+from cuemsutils.xml.XmlReaderWriter import XmlReaderWriter
+from cuemsutils.helpers import new_datetime
 from cuemsutils.log import logged, Logger
 
-from CuemsUtils import date_now_iso_utc
 
 from CuemsErrors import *
 from CuemsDBModel import Project, Media, ProjectMedia
@@ -76,7 +76,7 @@ class CuemsDBProject(StringSanitizer):
         with self.db.atomic() as transaction:
             try:
                 project.name=StringSanitizer.sanitize_name(data['CuemsScript']['name'])
-                now = date_now_iso_utc()
+                now = new_datetime()
                 data['CuemsScript']['modified'] = now
                 project.modified=now
                 project.description=StringSanitizer.sanitize_text_size(data['CuemsScript']['description'])
@@ -102,7 +102,7 @@ class CuemsDBProject(StringSanitizer):
         try:
             project_uuid = str(uuid_module.uuid1())
             data['CuemsScript']['id']= project_uuid
-            now = date_now_iso_utc()
+            now = new_datetime()
             data['CuemsScript']['created'] = now
             data['CuemsScript']['modified'] = now
         except KeyError as e:
@@ -148,7 +148,7 @@ class CuemsDBProject(StringSanitizer):
                     new_uuid = str(uuid_module.uuid1())
                     project.uuid = new_uuid
                     project.name = project.name + ' - Copy'
-                    project.modified=date_now_iso_utc()
+                    project.modified=new_datetime()
                     project.save(force_insert=True)
 
                     dup_project= Project.get(Project.uuid==new_uuid)
@@ -267,12 +267,12 @@ class CuemsDBProject(StringSanitizer):
     
     def save_xml(self, unix_name, project_object):
 
-        writer = XmlWriter(schema_name = self.xsd_path, xmlfile = (os.path.join(self.projects_path, unix_name, SCRIPT_FILE_NAME)))
+        writer = XmlReaderWriter(schema_name = self.xsd_path, xmlfile = (os.path.join(self.projects_path, unix_name, SCRIPT_FILE_NAME)))
         writer.write_from_object(project_object)
 
 
     def load_xml(self, unix_name):
-        reader = XmlReader(schema_name = self.xsd_path, xmlfile = (os.path.join(self.projects_path, unix_name, SCRIPT_FILE_NAME)))
+        reader = XmlReaderWriter(schema_name = self.xsd_path, xmlfile = (os.path.join(self.projects_path, unix_name, SCRIPT_FILE_NAME)))
         return reader.read()
 
             
