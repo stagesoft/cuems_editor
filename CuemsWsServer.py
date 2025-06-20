@@ -27,7 +27,7 @@ from cuemsutils.CommunicatorServices import Communicator
 class CuemsWsServer():
     
     def __init__(self, settings_dict, mappings_dict ):
-        self.engine_communicator = Communicator(address="ipc:///tmp/test1.sock")  
+        self.engine_communicator = Communicator(address="/tmp/test1.sock")  
         #self.engine_queue = Comunicator(address="ipc:///tmp/test2.sock")
         self.engine_messages = list()
         self.users = dict()
