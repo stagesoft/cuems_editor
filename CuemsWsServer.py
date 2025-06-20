@@ -13,15 +13,14 @@ import re
 
 from cuemsutils.log import logged, Logger
 
-from create_dummy import create_dummy_script
-
-
 from CuemsProjectManager import CuemsDBManager
 from CuemsWsUser import CuemsWsUser
 from CuemsUpload import CuemsUpload
 from CuemsErrors import *
 
 from cuemsutils.CommunicatorServices import Communicator
+from cuemsutils.create_script import create_script
+
 
 
 class CuemsWsServer():
@@ -34,6 +33,7 @@ class CuemsWsServer():
         self.sessions = dict()
         self.settings_dict = settings_dict
         self.mappings_dict = mappings_dict
+        self.initital_template= create_script()
         try:
             self.tmp_path = self.settings_dict['tmp_path']
             self.session_uuid = self.settings_dict['session_uuid']
@@ -205,10 +205,7 @@ class CuemsWsServer():
 
     # send initial json template to the client
     def initial_json_template(self):
-        initial_template = create_dummy_script()
-
-        return json.dumps({"type": "initial_template", "value": {"CuemsScript": initial_template}}) 
-
+        return json.dumps({"type": "initial_template", "value": {"CuemsScript": self.initital_template}})
   
     def initial_setting_message(self):
         return json.dumps({"type": "initial_mappings", "value": self.mappings_dict })
