@@ -3,7 +3,8 @@ import shutil
 import subprocess
 import re
 import struct
-import uuid as uuid_module
+from cuemsutils.helpers import new_uuid
+
 from enum import Enum, auto
 from peewee import *
 
@@ -88,7 +89,7 @@ class CuemsDBMedia(StringSanitizer):
                     media_thumbnail_binary_data = None
 
                     
-                Media.create(uuid=uuid_module.uuid1(), name=dest_filename, unix_name=dest_filename, created=new_datetime(), modified=new_datetime(), duration=media_duration, media_type=_type.name, in_trash=False)
+                Media.create(uuid=new_uuid(), name=dest_filename, unix_name=dest_filename, created=new_datetime(), modified=new_datetime(), duration=media_duration, media_type=_type.name, in_trash=False)
             except Exception as e:
                 Logger.error("error: {} {} triying to move new file, rolling back database insert".format(type(e), e))
                 transaction.rollback()

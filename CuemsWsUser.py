@@ -1,7 +1,6 @@
 import json
 import asyncio
-import uuid as uuid_module
-from datetime import datetime
+from cuemsutils.helpers import new_uuid, new_datetime
 import websockets as ws
 
 from cuemsutils.log import logged, Logger
@@ -124,9 +123,9 @@ class CuemsWsUser():
                 response = await self.server.engine_comunicator.send_request(engine_command)
             except Exception as e:
                 raise EngineError(f'can not connect to engine: {e}')
-            start_time = datetime.now()
+            start_time = new_datetime()
             while True:
-                time_delta = datetime.now() - start_time
+                time_delta = new_datetime() - start_time
                 if time_delta.total_seconds() >= 30: #TODO: decide timeout, or get it from settings?
                     raise TimeoutError(f'Timeout waiting {action} response from engine')
                 if response:
@@ -150,7 +149,7 @@ class CuemsWsUser():
         Logger.info(f"user {id(self.websocket)} requesting ready project {project_uuid}")
         try:
             unix_name = await self.server.event_loop.run_in_executor(self.server.executor, self.get_project_unix_name, project_uuid)
-            action_uuid = str(uuid_module.uuid1())
+            action_uuid = str(new_uuid())
             engine_command = {"action" : "project_ready", "action_uuid": action_uuid, "value" : unix_name}
 
             result = await self.comunicate_with_engine(action, action_uuid, engine_command)
@@ -164,7 +163,7 @@ class CuemsWsUser():
     async def hw_discovery(self, action):
         Logger.info(f"user {id(self.websocket)} requesting hardware dicovery")
         try:
-            action_uuid = str(uuid_module.uuid1())
+            action_uuid = str(new_uuid())
             engine_command = {"action" : "hw_discovery", "action_uuid": action_uuid}
 
             result = await self.comunicate_with_engine(action, action_uuid, engine_command)
@@ -179,7 +178,7 @@ class CuemsWsUser():
         Logger.info(f"user {id(self.websocket)} requesting deploy project {project_uuid}")
         try:
             unix_name = await self.server.event_loop.run_in_executor(self.server.executor, self.get_project_unix_name, project_uuid)
-            action_uuid = str(uuid_module.uuid1())
+            action_uuid = str(new_uuid())
             engine_command = {"action" : "project_deploy", "action_uuid": action_uuid, "value" : unix_name}
 
             result = await self.comunicate_with_engine(action, action_uuid, engine_command)

@@ -16,7 +16,6 @@ from CuemsErrors import *
 
 
 
-SCRIPT_SCHEMA_FILE_PATH = '/etc/cuems/script.xsd' #TODO: get all this constants from config?
 
 
 
@@ -33,7 +32,7 @@ class CuemsDBManager():
             Logger.error(f'can not read settings {e}')
             raise e
 
-        self.xsd_path = SCRIPT_SCHEMA_FILE_PATH
+        self.xsd_path = "script"
         self.db_path = os.path.join(self.library_path, self.db_name)
         self.models = [Project, Media,  ProjectMedia]
         database.init(self.db_path)

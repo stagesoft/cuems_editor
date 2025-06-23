@@ -7,7 +7,6 @@ import random
 from cuemsutils.log import Logger
 
 
-Logger.setLevel(logging.INFO)
 
 db = SqliteDatabase('project-manager.db')
 
