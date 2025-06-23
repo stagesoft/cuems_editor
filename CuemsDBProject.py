@@ -1,6 +1,5 @@
 import os
 import traceback
-import uuid as uuid_module
 import shutil
 from peewee import DoesNotExist, IntegrityError
 
@@ -8,7 +7,7 @@ from cuemsutils.StringSanitizer import StringSanitizer
 from cuemsutils.CopyMoveVersioned import CopyMoveVersioned
 from cuemsutils.xml.Parsers import CuemsParser
 from cuemsutils.xml.XmlReaderWriter import XmlReaderWriter
-from cuemsutils.helpers import new_datetime
+from cuemsutils.helpers import new_datetime, new_uuid
 from cuemsutils.log import logged, Logger
 
 
@@ -100,7 +99,7 @@ class CuemsDBProject(StringSanitizer):
             raise e
         
         try:
-            project_uuid = str(uuid_module.uuid1())
+            project_uuid = str(new_uuid())
             data['CuemsScript']['id']= project_uuid
             now = new_datetime()
             data['CuemsScript']['created'] = now
@@ -145,7 +144,7 @@ class CuemsDBProject(StringSanitizer):
                     project_path = os.path.join(self.projects_path, project.unix_name)
                     new_unix_name = CopyMoveVersioned.copy_dir(project_path, self.projects_path, project.unix_name)
                     project.unix_name = new_unix_name
-                    new_uuid = str(uuid_module.uuid1())
+                    new_uuid = str(new_uuid())
                     project.uuid = new_uuid
                     project.name = project.name + ' - Copy'
                     project.modified=new_datetime()

@@ -1,8 +1,7 @@
 from peewee import *
 from datetime import datetime
 import time
-import uuid
-
+from cuemsutils.helpers import new_uuid
 import random
 from cuemsutils.log import Logger
 
@@ -77,22 +76,22 @@ db.create_tables([Project, Media, ProjectMedia])
 def populate_db():
     
 
-    p1 = Project.create(uuid=uuid.uuid1(), name='Proyecto 1', created=now_formated(), modified=now_formated())
+    p1 = Project.create(uuid=new_uuid(), name='Proyecto 1', created=now_formated(), modified=now_formated())
     time.sleep(random.randrange(10))
-    p2 = Project.create(uuid=uuid.uuid1(), name='Proyecto 2', created=now_formated(), modified=now_formated())
+    p2 = Project.create(uuid=new_uuid, name='Proyecto 2', created=now_formated(), modified=now_formated())
     time.sleep(random.randrange(10))
-    p3 = Project.create(uuid=uuid.uuid1(), name='Proyecto 3', created=now_formated(), modified=now_formated())
+    p3 = Project.create(uuid=new_uuid, name='Proyecto 3', created=now_formated(), modified=now_formated())
 
-    m1 = Media.create(uuid=uuid.uuid1(), name='Media 1', created=now_formated(), modified=now_formated())
+    m1 = Media.create(uuid=new_uuid(), name='Media 1', created=now_formated(), modified=now_formated())
     time.sleep(random.randrange(10))
-    m2 = Media.create(uuid=uuid.uuid1(), name='Media 2', created=now_formated(), modified=now_formated())
+    m2 = Media.create(uuid=new_uuid(), name='Media 2', created=now_formated(), modified=now_formated())
     time.sleep(random.randrange(10))
-    m3 = Media.create(uuid=uuid.uuid1(), name='Media 3', created=now_formated(), modified=now_formated())
+    m3 = Media.create(uuid=new_uuid(), name='Media 3', created=now_formated(), modified=now_formated())
     
     time.sleep(random.randrange(10))
-    m4 = Media.create(uuid=uuid.uuid1(), name='Orphan 1', created=now_formated(), modified=now_formated())
+    m4 = Media.create(uuid=new_uuid(), name='Orphan 1', created=now_formated(), modified=now_formated())
     time.sleep(random.randrange(10))
-    m5 = Media.create(uuid=uuid.uuid1(), name='Orphan 2', created=now_formated(), modified=now_formated())
+    m5 = Media.create(uuid=new_uuid(), name='Orphan 2', created=now_formated(), modified=now_formated())
 
     ProjectMedia.create( project=p1, media=m1)
     ProjectMedia.create( project=p1, media=m2)
