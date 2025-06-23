@@ -89,7 +89,7 @@ class CuemsDBMedia(StringSanitizer):
                     media_thumbnail_binary_data = None
 
                     
-                Media.create(uuid=new_uuid(), name=dest_filename, unix_name=dest_filename, created=new_datetime(), modified=new_datetime(), duration=media_duration, media_type=_type.name, in_trash=False)
+                Media.create(uuid=str(new_uuid()), name=dest_filename, unix_name=dest_filename, created=new_datetime(), modified=new_datetime(), duration=media_duration, media_type=_type.name, in_trash=False)
             except Exception as e:
                 Logger.error("error: {} {} triying to move new file, rolling back database insert".format(type(e), e))
                 transaction.rollback()
