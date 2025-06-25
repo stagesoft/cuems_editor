@@ -8,7 +8,6 @@ from multiprocessing import Process
 import signal
 from random import randint  #TODO: clean unused
 from hashlib import md5
-import uuid as uuid_module
 import re
 
 from cuemsutils.log import logged, Logger
@@ -19,7 +18,7 @@ from CuemsUpload import CuemsUpload
 from CuemsErrors import *
 
 from cuemsutils.CommunicatorServices import Communicator
-from cuemsutils.create_script import create_script
+from cuemsutils.create_script import create_script, new_uuid
 
 
 
@@ -128,20 +127,21 @@ class CuemsWsServer():
         await self.load_session(user_session)
 
     async def check_session(self, user_session, path):
-        session_uuid_patern = r"/\?session=(?P<uuid>[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[1][0-9A-Fa-f]{3}-[89AB][0-9A-Fa-f]{3}-[0-9A-Fa-f]{12})?"
+        session_uuid_patern = r"/\?session=(?P<uuid>[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12})?"
+        
         matches = re.search(session_uuid_patern, path)
         if matches:
             if (matches.groupdict()['uuid'] != None):
                 uuid = matches.groupdict()['uuid']
                 if uuid  not in self.sessions:
                     Logger.debug(f"uuid not found {uuid}, creating new session")
-                    uuid = str(uuid_module.uuid1())
+                    uuid = str(new_uuid())
                 else:
                     Logger.debug(f"session_id found, reusing {uuid}")
             else:
-                uuid = str(uuid_module.uuid1())
+                uuid = str(new_uuid())
         else:
-            uuid = str(uuid_module.uuid1())
+            uuid = str(new_uuid())
         try:
             self.sessions[uuid]['ws']=id(user_session.websocket)
         except KeyError:
