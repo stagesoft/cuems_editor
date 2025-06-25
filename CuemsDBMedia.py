@@ -75,7 +75,7 @@ class CuemsDBMedia(StringSanitizer):
                 try:
                     if _type is MediaType.MOVIE:
                         dest_thumbnail_filename = None
-                        dest_thumbnail_filename = self.create_video_thubnail(dest_filename, media_duration)
+                        dest_thumbnail_filename = self.create_video_thumbnail(dest_filename, media_duration)
                     elif _type is MediaType.AUDIO:
                         dest_thumbnail_filename = None
                         dest_waveform_filename = None
@@ -83,7 +83,7 @@ class CuemsDBMedia(StringSanitizer):
                         dest_waveform_filename = self.create_audio_waveform(dest_filename)
                     elif _type is MediaType.IMAGE:
                         dest_thumbnail_filename = None
-                        dest_thumbnail_filename = self.create_video_thubnail(dest_filename, None)
+                        dest_thumbnail_filename = self.create_video_thumbnail(dest_filename, None)
                 except Exception as e:
                     Logger.error(f'could not generate {_type} thumbnail or waveform; error : {e}')
                     media_thumbnail_binary_data = None
@@ -416,7 +416,7 @@ class CuemsDBMedia(StringSanitizer):
         else:
             raise NotTimeCodeError('ffprobe output does not match timecode format')
 
-    def create_video_thubnail(self, filename, duration):
+    def create_video_thumbnail(self, filename, duration):
         # ffmpeg -y -hide_banner -loglevel warning -i input.mov -vf "scale=240:-1" -vframes 1 out.png
         file_path = self.get_file_path(filename)
         thumbnail_file_path = self.get_thumbnail_path(filename)
