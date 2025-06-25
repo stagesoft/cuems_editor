@@ -120,7 +120,7 @@ class CuemsWsUser():
     async def comunicate_with_engine(self, action, action_uuid, engine_command):
         try:
             try:
-                response = await self.server.engine_comunicator.send_request(engine_command)
+                response = await self.server.engine_communicator.send_request(engine_command)
             except Exception as e:
                 raise EngineError(f'can not connect to engine: {e}')
             start_time = new_datetime()
