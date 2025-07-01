@@ -230,6 +230,7 @@ class CuemsDBProject(StringSanitizer):
         except DoesNotExist:
             raise NonExistentItemError("item with uuid: {} does not exist".format(uuid))
 
+#TODO change function  to get_media_filenames instead of get_media_files
     def add_media_relations(self, project, project_object, data):
         media_dict = project_object.get_media()
         for media_name, value in media_dict.items():
