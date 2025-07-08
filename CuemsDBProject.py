@@ -84,7 +84,6 @@ class CuemsDBProject(StringSanitizer):
                 self.update_media_relations(project, project_object, data)
                 self.save_xml(project.unix_name, project_object)
             except Exception as e:
-                Logger.error(traceback.format_exc()) # TODO: clean, only for debug
                 Logger.error("error: {} {} triying to update  project, rolling back database update".format(type(e), e))
                 transaction.rollback()
                 raise e
@@ -127,7 +126,6 @@ class CuemsDBProject(StringSanitizer):
                 raise e
             except Exception as e:
                 transaction.rollback()
-                Logger.error(traceback.format_exc()) # TODO: clean, only for debug
                 Logger.error("error: {} {} ;triying to make new  project, rolling back database insert".format(type(e), e))
                 
                 if os.path.exists(os.path.join(self.projects_path, unix_name)):
@@ -230,10 +228,9 @@ class CuemsDBProject(StringSanitizer):
         except DoesNotExist:
             raise NonExistentItemError("item with uuid: {} does not exist".format(uuid))
 
-#TODO change function  to get_media_filenames instead of get_media_files
     def add_media_relations(self, project, project_object, data):
-        media_dict = project_object.get_media()
-        for media_name, value in media_dict.items():
+        media_filenames_list = project_object.get_media_filenames()
+        for media_name in media_filenames_list:
             media = Media.get(Media.unix_name==media_name)
             ProjectMedia.create( project=project, media=media)    
     
@@ -244,11 +241,8 @@ class CuemsDBProject(StringSanitizer):
             old_media_dict[media.unix_name] = str(media.uuid)
         old_media_list=list(old_media_dict.keys())
 
-        
-        
-        media_dict = project_object.get_media()
-        media_list =list(media_dict.keys())
-        
+        media_list = project_object.get_media_filenames()
+         
         remove_set = set(old_media_list).difference(media_list)
         add_set = set(media_list).difference(old_media_list)
 
