@@ -23,8 +23,8 @@ SCRIPT_FILE_NAME = 'script.xml'
 PROJECT_FOLDER_NAME = 'projects'
 MEDIA_FOLDER_NAME = 'media'
 TRASH_FOLDER_NAME = 'trash'
-THUMBNAIL_FOLDER_NAME = 'thumbnail'
-WAVEFORM_FOLDER_NAME = 'waveform'
+THUMBNAIL_FOLDER_NAME = 'thumbnails'
+WAVEFORM_FOLDER_NAME = 'waveforms'
 THUMBNAIL_EXTENSION = '.png'
 WAVEFORM_EXTENSION = '.dat'
 THUMBNAIL_W = 240
@@ -74,14 +74,17 @@ class CuemsDBMedia(StringSanitizer):
 
                 try:
                     if _type is MediaType.MOVIE:
+                        Logger.debug(f'creating thumbnail for movie: {dest_filename}')
                         dest_thumbnail_filename = None
                         dest_thumbnail_filename = self.create_video_thumbnail(dest_filename, media_duration)
                     elif _type is MediaType.AUDIO:
+                        Logger.debug(f'creating thumbnail for audio: {dest_filename}')
                         dest_thumbnail_filename = None
                         dest_waveform_filename = None
                         dest_thumbnail_filename = self.create_audio_thubnail(dest_filename, media_duration)
                         dest_waveform_filename = self.create_audio_waveform(dest_filename)
                     elif _type is MediaType.IMAGE:
+                        Logger.debug(f'creating thumbnail for image: {dest_filename}')
                         dest_thumbnail_filename = None
                         dest_thumbnail_filename = self.create_video_thumbnail(dest_filename, None)
                 except Exception as e:
@@ -415,23 +418,26 @@ class CuemsDBMedia(StringSanitizer):
             return duration
         else:
             raise NotTimeCodeError('ffprobe output does not match timecode format')
-
+    @logged
     def create_video_thumbnail(self, filename, duration):
-        # ffmpeg -y -hide_banner -loglevel warning -i input.mov -vf "scale=240:-1" -vframes 1 out.png
+        # ffmpeg -y -hide_banner -loglevel warning -i input.mov -vf "scale=240:-1" -frames:v 1 -update true out.png
         file_path = self.get_file_path(filename)
         thumbnail_file_path = self.get_thumbnail_path(filename)
         if duration is None:
-            result = subprocess.run(['ffmpeg', '-y', '-hide_banner', '-loglevel', 'warning', '-i', file_path, '-vf', f'scale={str(THUMBNAIL_W)}:-1', '-vframes', '1', thumbnail_file_path], stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+            result = subprocess.run(['ffmpeg', '-y', '-hide_banner', '-loglevel', 'warning', '-i', file_path, '-vf', f'scale={str(THUMBNAIL_W)}:-1', '-frames:v', '1', '-update', 'true', thumbnail_file_path], stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
         else:
             time_option = "-ss"
             timecode = f'200ms'
-            result = subprocess.run(['ffmpeg', time_option, timecode, '-y', '-hide_banner', '-loglevel', 'warning', '-i', file_path, '-vf', f'scale={str(THUMBNAIL_W)}:-1', '-vframes', '1', thumbnail_file_path], stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+            result = subprocess.run(['ffmpeg', time_option, timecode, '-y', '-hide_banner', '-loglevel', 'warning', '-i', file_path, '-vf', f'scale={str(THUMBNAIL_W)}:-1', '-vframes', '1', '-update', 'true', thumbnail_file_path], stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
         
         if os.path.exists(thumbnail_file_path):
-            return thumbnail_file_path   
+            Logger.debug(f'thumbnail file created for {filename}, output: {result.stdout.decode("utf8")}')
+            return thumbnail_file_path
+        else:
+            Logger.debug(f'thumbnail file not created for {filename}, output: {result.stdout.decode("utf8")}')
 
 
-
+    @logged
     def create_audio_thubnail(self, filename, duration):
         # audiowaveform -i sample.wav -o sample.dat -b 8
         file_path = self.get_file_path(filename)
@@ -441,6 +447,8 @@ class CuemsDBMedia(StringSanitizer):
         
         if os.path.exists(thumbnail_file_path):
             return thumbnail_file_path
+        else:
+            Logger.debug(f'thumbnail file not created for {filename}, output: {result.stdout.decode("utf8")}')
 
     def create_audio_waveform(self, filename):
         # audiowaveform -i sample.wav -o sample.dat -b 8
@@ -449,8 +457,10 @@ class CuemsDBMedia(StringSanitizer):
         result = subprocess.run(['audiowaveform', '-i', file_path, '-o', waveform_file_path, '-b', '8'], stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
 
         if os.path.exists(waveform_file_path):
+            Logger.debug(f'waveform file created for {filename}, output: {result.stdout.decode("utf8")}')
             return waveform_file_path
-
+        else:
+            Logger.debug(f'waveform file not created for {filename}, output: {result.stdout.decode("utf8")}')
     def get_file_path(self, filename, trash_state=False):
         if trash_state is False:
             return os.path.join(self.media_path, filename)
