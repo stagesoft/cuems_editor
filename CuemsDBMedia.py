@@ -499,3 +499,11 @@ class CuemsDBMedia(StringSanitizer):
         # 36 bytes; first 36 positions, char = uuid 
 
         return struct.pack('<36s', str.encode(uuid_string)) + binary_data
+    
+    def check_if_media_existed_in_projects(self, filename):
+        projectmedia_mproject_refs = ProjectMedia.select(ProjectMedia.project_id, ProjectMedia.media_filename).where(ProjectMedia.media_filename==filename)
+
+        if projectmedia_mproject_refs:
+            return projectmedia_mproject_refs
+        else:
+            return False

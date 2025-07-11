@@ -264,7 +264,53 @@ class CuemsDBProject(StringSanitizer):
                 media = Media.select(Media.uuid).where(Media.unix_name==media_unix_name).get()
                 ProjectMedia.create( project=project, media=media, media_filename=media_unix_name)  
 
-    
+    def update_projects_existed_media(self, project_uuid, media_filename):
+        project_object = CuemsParser(self.load(project_uuid, include_trash=True)).parse()
+        media_dict = project_object.get_media()
+        matching_media_dict= dict()
+        for cue_uuid, media_object in media_dict.items(): 
+            for media_uiid, project_media_filename in media_object.items():
+                if media_filename == project_media_filename:
+                    matching_media_dict[cue_uuid] = media_object
+
+        if matching_media_dict:
+            Logger.debug('found cues with media filename: {} in project: {}'.format(media_filename, project_uuid))
+            first_media_object = next(iter(matching_media_dict.values()))
+            old_media_uuid = next(iter(first_media_object.keys()))
+            # TODO: manage if  all media with same filename have the same uuid  SHOULD BE TRUE
+            for cue_uuid, media in matching_media_dict.items():
+                for media_uuid, media_filename in media.items():
+                    if media_uuid != old_media_uuid:
+                        Logger.warning('found different media uuid for same media filename: {} in project {},  cue {}, using first found: {}'.format(project_uuid, cue_uuid, media_filename))   
+            try:
+                self.update_existed_media_uuid(media_filename, old_media_uuid)
+            except IntegrityError:
+                Logger.warning('error updating media uuid for media filename: {} from project: {}. Media uuid inconsistency detected'.format(media_filename, project_uuid))
+            self.deletele_mising_media_references(media_filename)
+            project = Project.get(Project.uuid==project_uuid)
+            self.update_media_relations(project, project_object)
+        else:
+            Logger.warning('no cues found for media filename: {}'.format(media_filename))
+
+
+    def update_existed_media_uuid(self, media_filename, old_media_uuid):
+            Logger.debug('updating media uuid for media filename: {} with old uuid: {}'.format(media_filename, old_media_uuid))
+            try:
+                media = Media.get(Media.unix_name==media_filename)
+                with self.db.atomic() as transaction:
+                    try:
+                        Media.update(uuid=old_media_uuid).where(Media.unix_name == media_filename).execute()
+                    except Exception as e:
+                        Logger.error("error: {} {}; triying to update media uuid, rolling back database update".format(type(e), e))
+                        transaction.rollback()
+                        raise e
+            except DoesNotExist:
+                raise NonExistentItemError("item with unix_name: {} does not exist".format(media_filename)) 
+              
+    def deletele_mising_media_references(self, media_filename):
+        Logger.debug('deleting missing media references for media filename: {}'.format(media_filename))
+        missing_media_project_refs = ProjectMedia.delete().where(ProjectMedia.media_filename == media_filename and ProjectMedia.media_id.is_null()).execute()
+
     def save_xml(self, unix_name, project_object):
 
         writer = XmlReaderWriter(schema_name = self.xsd_path, xmlfile = (os.path.join(self.projects_path, unix_name, SCRIPT_FILE_NAME)))

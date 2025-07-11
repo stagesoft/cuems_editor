@@ -105,11 +105,23 @@ class CuemsUpload(StringSanitizer):
             dest_filename = await self.server.event_loop.run_in_executor(self.server.executor, self.server.db.media.new,  self.tmp_file_path(), self.filename)
             self.tmp_filename = None
             Logger.debug('upload completed')
+            await self.server.event_loop.run_in_executor(self.server.executor, self.check_if_media_existed,  dest_filename)
             await self.message_sender(json.dumps({"close" : True}))
             await self.server.notify_others_list_changes(None, "file_list")
         except Exception as e:
             Logger.error("error: {} {}".format(type(e), e))
             await self.message_sender(json.dumps({'error' : 'error saving file', 'fatal': True}))
+
+### SYNC METHODS
+    def check_if_media_existed(self, filename):
+        Logger.debug(f"checking if file {filename} already existed in projects")
+        projectmedia_list = self.server.db.media.check_if_media_existed_in_projects(filename)
+        if projectmedia_list:
+            for projectmedia in projectmedia_list:
+                Logger.info("file {} already existed in project: {}".format(filename, projectmedia.project_id))
+                self.server.db.project.update_projects_existed_media(projectmedia.project_id, filename)
+        else:
+            Logger.debug("file did not exist in any project, no action needed")
 
     def check_file_integrity(self, path, original_md5):
 
