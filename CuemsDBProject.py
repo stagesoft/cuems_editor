@@ -36,9 +36,12 @@ class CuemsDBProject(StringSanitizer):
         except DoesNotExist:
             raise NonExistentItemError("item with uuid: {} does not exist".format(uuid))
         
-    def load(self, uuid):
+    def load(self, uuid, include_trash=False):
         try:
-            project = Project.get((Project.uuid==uuid) & (Project.in_trash == False))
+            if not include_trash:
+                project = Project.get((Project.uuid==uuid) & (Project.in_trash == False))
+            else:
+                project = Project.get(Project.uuid==uuid)
             return self.load_xml(project.unix_name)
         except DoesNotExist:
             raise NonExistentItemError("item with uuid: {} does not exist".format(uuid))
