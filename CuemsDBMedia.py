@@ -91,8 +91,10 @@ class CuemsDBMedia(StringSanitizer):
                     Logger.error(f'could not generate {_type} thumbnail or waveform; error : {e}')
                     media_thumbnail_binary_data = None
 
-                    
-                Media.create(uuid=str(new_uuid()), name=dest_filename, unix_name=dest_filename, created=new_datetime(), modified=new_datetime(), duration=media_duration, media_type=_type.name, in_trash=False)
+                media_uuid = new_uuid()
+                Media.create(uuid=str(media_uuid), name=dest_filename, unix_name=dest_filename, created=new_datetime(), modified=new_datetime(), duration=media_duration, media_type=_type.name, in_trash=False)
+                Logger.debug(f'new media created: {media_uuid} {dest_filename}')
+                return dest_filename
             except Exception as e:
                 Logger.error("error: {} {} triying to move new file, rolling back database insert".format(type(e), e))
                 transaction.rollback()

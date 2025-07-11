@@ -102,7 +102,7 @@ class CuemsUpload(StringSanitizer):
             
             await self.server.event_loop.run_in_executor(self.server.executor, self.check_file_integrity,  self.tmp_file_path(), received_md5)
             
-            await self.server.event_loop.run_in_executor(self.server.executor, self.server.db.media.new,  self.tmp_file_path(), self.filename)
+            dest_filename = await self.server.event_loop.run_in_executor(self.server.executor, self.server.db.media.new,  self.tmp_file_path(), self.filename)
             self.tmp_filename = None
             Logger.debug('upload completed')
             await self.message_sender(json.dumps({"close" : True}))
