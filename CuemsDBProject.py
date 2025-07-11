@@ -81,7 +81,7 @@ class CuemsDBProject(StringSanitizer):
                 project.description=StringSanitizer.sanitize_text_size(data['CuemsScript']['description'])
                 project.save()
                 project_object = CuemsParser(data).parse()
-                self.update_media_relations(project, project_object, data)
+                self.update_media_relations(project, project_object)
                 self.save_xml(project.unix_name, project_object)
             except Exception as e:
                 Logger.error("error: {} {} triying to update  project, rolling back database update".format(type(e), e))
@@ -117,7 +117,7 @@ class CuemsDBProject(StringSanitizer):
                 Logger.debug('data is now: {}'.format(data))
                 project_object = CuemsParser(data).parse()
                 Logger.debug(f'project_object is now: {type(project_object)},{project_object}')
-                self.add_media_relations(project, project_object, data)
+                self.add_media_relations(project, project_object)
                 self.save_xml(unix_name, project_object)
                 return project_uuid
             except IntegrityError as e:
@@ -151,7 +151,7 @@ class CuemsDBProject(StringSanitizer):
                     dup_project= Project.get(Project.uuid==new_uuid)
                     data = self.load_xml(dup_project.unix_name)
                     project_object = CuemsParser(data).parse()
-                    self.add_media_relations(dup_project, project_object, data)
+                    self.add_media_relations(dup_project, project_object)
                     return new_uuid
                 except Exception as e:
                     Logger.error("error: {} {}; triying to duplicate  project, rolling back database update".format(type(e), e))
@@ -175,7 +175,7 @@ class CuemsDBProject(StringSanitizer):
                     dest_filename = CopyMoveVersioned.move(file_path, self.trash_path, project.unix_name)
                     project.in_trash = True
                     project.save()
-                    Logger.debug('deleting instance from table: {}'.format(project))
+                    Logger.debug('updating instance in db: {}'.format(project))
                 except Exception as e:
                     Logger.error("error: {} {}; triying to move file to trash, rolling back database".format(type(e), e))
                     transaction.rollback()
@@ -199,7 +199,7 @@ class CuemsDBProject(StringSanitizer):
                     dest_filename = CopyMoveVersioned.move(project_path, self.projects_path, project_trash.unix_name)
                     project_trash.in_trash = False
                     project_trash.save()
-                    Logger.debug('deleting instance from table: {}'.format(project_trash))
+                    Logger.debug('updating instance in db: {}'.format(project_trash))
                 except Exception as e:
                     Logger.error("error: {} {}; triying to move file to trash, rolling back database".format(type(e), e))
                     transaction.rollback()
@@ -228,13 +228,14 @@ class CuemsDBProject(StringSanitizer):
         except DoesNotExist:
             raise NonExistentItemError("item with uuid: {} does not exist".format(uuid))
 
-    def add_media_relations(self, project, project_object, data):
+    def add_media_relations(self, project, project_object):
         media_filenames_list = project_object.get_media_filenames()
         for media_name in media_filenames_list:
             media = Media.get(Media.unix_name==media_name)
             ProjectMedia.create( project=project, media=media)    
     
-    def update_media_relations(self, project, project_object, data):
+    def update_media_relations(self, project, project_object):
+        Logger.debug('updating media relations for project: {}'.format(project.unix_name))
         old_media_query = project.medias()
         old_media_dict = dict()
         for media in old_media_query:

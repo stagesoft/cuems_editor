@@ -260,7 +260,7 @@ class CuemsDBMedia(StringSanitizer):
                     dest_filename = CopyMoveVersioned.move(file_path, self.trash_path)
                     media.in_trash = True
                     media.save()
-                    Logger.debug('modifing instance in table: {}'.format(media))
+                    Logger.debug('updating instance in db: {}'.format(media))
                 except Exception as e:
                     Logger.error("error: {} {}; triying to move file to trash, rolling back database".format(type(e), e))
                     transaction.rollback()
@@ -322,7 +322,7 @@ class CuemsDBMedia(StringSanitizer):
                     dest_filename = CopyMoveVersioned.move(file_path, self.media_path)
                     media_trash.in_trash = False
                     media_trash.save()
-                    Logger.debug('deleting instance from table: {}'.format(media_trash))
+                    Logger.debug('updating instance in db: {}'.format(media_trash))
                 except Exception as e:
                     Logger.error("error: {} {}; triying to move file to trash, rolling back database".format(type(e), e))
                     transaction.rollback()
