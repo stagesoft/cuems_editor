@@ -80,7 +80,8 @@ class Media(CuemsBaseModel):
 class ProjectMedia(CuemsBaseModel):
     id = PrimaryKeyField()
     project = ForeignKeyField(Project, backref='project_medias')
-    media = ForeignKeyField(Media, backref='media_projects')
+    media = ForeignKeyField(Media, backref='media_projects', null=True)
+    media_filename = CharField(null=True)  # This is a denormalized field to speed up queries
 
     def missing_refs(self):
         return (ProjectMedia
