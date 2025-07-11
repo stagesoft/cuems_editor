@@ -235,17 +235,19 @@ class CuemsDBProject(StringSanitizer):
         media_filenames_list = project_object.get_media_filenames()
         for media_name in media_filenames_list:
             media = Media.get(Media.unix_name==media_name)
-            ProjectMedia.create( project=project, media=media)    
+            ProjectMedia.create( project=project, media=media, media_filename=media_name)    
     
     def update_media_relations(self, project, project_object):
         Logger.debug('updating media relations for project: {}'.format(project.unix_name))
         old_media_query = project.medias()
         old_media_dict = dict()
+        Logger.debug('query done')
         for media in old_media_query:
             old_media_dict[media.unix_name] = str(media.uuid)
         old_media_list=list(old_media_dict.keys())
-
+        Logger.debug('old media list: {}'.format(old_media_list))
         media_list = project_object.get_media_filenames()
+        Logger.debug('media list: {}'.format(media_list))
          
         remove_set = set(old_media_list).difference(media_list)
         add_set = set(media_list).difference(old_media_list)
@@ -260,7 +262,7 @@ class CuemsDBProject(StringSanitizer):
         if add_set:
             for media_unix_name in add_set:
                 media = Media.select(Media.uuid).where(Media.unix_name==media_unix_name).get()
-                ProjectMedia.create( project=project, media=media)
+                ProjectMedia.create( project=project, media=media, media_filename=media_unix_name)  
 
     
     def save_xml(self, unix_name, project_object):
