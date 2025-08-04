@@ -236,6 +236,64 @@ class CuemsDBProject(StringSanitizer):
                     raise e
         except DoesNotExist:
             raise NonExistentItemError("item with uuid: {} does not exist".format(uuid))
+        
+    def export(self, uuid):
+        try:
+            tmp_project_path = None
+            output_filename = None
+            try:
+                project = Project.get(Project.uuid==uuid)
+            except DoesNotExist:
+                raise NonExistentItemError("item with uuid: {} does not exist".format(uuid))
+            
+            unix_name = project.unix_name
+            project_path = os.path.join(self.projects_path, unix_name, self.script_file_name)
+            project_medias = ProjectMedia.select().where(ProjectMedia.project == project)
+            tmp_project_path = os.path.join(self.tmp_path, unix_name)
+            if not os.path.exists(tmp_project_path):
+                os.makedirs(tmp_project_path)
+            Logger.debug('exporting project {} to {}'.format(unix_name, tmp_project_path))
+            shutil.copy(project_path, tmp_project_path)
+
+            project_medias = prefetch(
+                project_medias,
+                Media)
+            if project_medias:
+                Logger.debug('project {} has media relations, triying to export them'.format(unix_name))
+                tmp_media_path = os.path.join(tmp_project_path,'media')
+                os.makedirs(tmp_media_path)
+                for media in project_medias:
+                    media_path = os.path.join(self.media_path, media.media.unix_name)
+                    try:
+                        shutil.copy(media_path, tmp_media_path)
+                        Logger.debug('copiing media {} to {}'.format(media.media.unix_name, tmp_media_path))
+                    except Exception as e:
+                        Logger.error("error: {} {}; triying to copy media to project export dir".format(type(e), e))
+                        raise e
+            else:
+                Logger.debug('project {} has no media relations, skipping media export'.format(unix_name))
+            shutil.make_archive(tmp_project_path, 'zip', self.tmp_path, unix_name)
+            output_filename = unix_name + '.zip'
+            server_export_path = os.path.join(self.settings_dict['html_root_path'], self.settings_dict['export_folder_name'])
+            try:
+                dest_filename = CopyMoveVersioned.move(os.path.join(self.tmp_path, output_filename), server_export_path, output_filename)
+                export_url = os.path.join(self.settings_dict['export_folder_name'], dest_filename)
+                return export_url
+            except Exception as e:
+                Logger.error("error: {} {}; triying to move exported project to exports folder".format(type(e), e))
+                raise e
+        
+        except Exception as e:
+            Logger.error("error: {} {}; triying to export project".format(type(e), e))
+            raise e
+        finally:
+            if tmp_project_path is not None and os.path.exists(tmp_project_path):
+                shutil.rmtree(tmp_project_path)
+                Logger.debug('cleaning tmp project export folder: {}'.format(tmp_project_path))
+            if output_filename is not None and os.path.exists(os.path.join(self.tmp_path, output_filename)):
+                os.remove(os.path.join(self.tmp_path, output_filename))
+                Logger.debug('cleaning tmp project export file: {}'.format(os.path.join(self.tmp_path, output_filename)))
+                                  
 
     def add_media_relations(self, project, project_object):
         media_filenames_list = project_object.get_media_filenames()

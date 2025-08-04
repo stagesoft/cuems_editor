@@ -24,6 +24,8 @@ settings_dict['waveform_folder_name'] = 'waveforms'
 settings_dict['thumbnail_extension'] = '.png'
 settings_dict['waveform_extension'] = '.dat'
 settings_dict['thumbnail_size'] = (240, 240)  # width, height
+settings_dict['export_folder_name'] = 'exports'
+settings_dict['html_root_path'] = '/var/www/cuems'
 
 mappings_dict = {'number_of_nodes': 1, 'default_audio_input': '0367f391-ebf4-48b2-9f26-000000000001_system:capture_1', 'default_audio_output': '0367f391-ebf4-48b2-9f26-000000000001_system:playback_1', 'default_video_input': None, 'default_video_output': '0367f391-ebf4-48b2-9f26-000000000001_0', 'default_dmx_input': None, 'default_dmx_output': None, 'nodes': [{'uuid': '0367f391-ebf4-48b2-9f26-000000000001', 'mac': '2cf05d21cca3', 'audio': {'outputs': [{'name': 'system:playback_1', 'mappings': [{'mapped_to': 'system:playback_1'}]}, {'name': 'system:playback_2', 'mappings': [{'mapped_to': 'system:playback_2'}]}], 'inputs': [{'name': 'system:capture_1', 'mappings': [{'mapped_to': 'system:capture_1'}]}, {'name': 'system:capture_2', 'mappings': [{'mapped_to': 'system:capture_2'}]}]}, 'video': {'outputs': [{'name': '0', 'mappings': [{'mapped_to': '0'}]}]}, 'dmx': None}]}
 
