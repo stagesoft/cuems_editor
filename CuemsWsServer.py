@@ -17,7 +17,7 @@ from CuemsWsUser import CuemsWsUser
 from CuemsUpload import CuemsUpload
 from CuemsErrors import *
 
-from cuemsutils.CommunicatorServices import Communicator
+from cuemsutils.tools.CommunicatorServices import Communicator
 from cuemsutils.create_script import create_script, new_uuid
 
 

@@ -7,7 +7,7 @@ import websockets as ws
 
 
 from cuemsutils.log import logged, Logger
-from cuemsutils.StringSanitizer import StringSanitizer
+from cuemsutils.tools.StringSanitizer import StringSanitizer
 
 from CuemsErrors import *
 

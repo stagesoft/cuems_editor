@@ -9,9 +9,9 @@ from enum import Enum, auto
 from peewee import *
 
 
-from cuemsutils.StringSanitizer import StringSanitizer
-from cuemsutils.CopyMoveVersioned import CopyMoveVersioned
-from cuemsutils.CTimecode  import CTimecode
+from cuemsutils.tools.StringSanitizer import StringSanitizer
+from cuemsutils.tools.CopyMoveVersioned import CopyMoveVersioned
+from cuemsutils.tools.CTimecode  import CTimecode
 from cuemsutils.log import logged, Logger
 from cuemsutils.helpers import new_datetime
 

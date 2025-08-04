@@ -3,8 +3,8 @@ import traceback
 import shutil
 from peewee import DoesNotExist, IntegrityError
 
-from cuemsutils.StringSanitizer import StringSanitizer
-from cuemsutils.CopyMoveVersioned import CopyMoveVersioned
+from cuemsutils.tools.StringSanitizer import StringSanitizer
+from cuemsutils.tools.CopyMoveVersioned import CopyMoveVersioned
 from cuemsutils.xml.Parsers import CuemsParser
 from cuemsutils.xml.XmlReaderWriter import XmlReaderWriter
 from cuemsutils.helpers import new_datetime, new_uuid
