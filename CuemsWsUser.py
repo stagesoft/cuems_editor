@@ -45,54 +45,42 @@ class CuemsWsUser():
                 await self.notify_error_to_user('error decoding json') 
                 continue
             try:
-                if "action" not in data:
-                    Logger.error("unsupported event: {}".format(data))
-                    await self.notify_error_to_user("unsupported event: {}".format(data))
-                elif data["action"] == "project_load":
-                    await self.send_project(data["value"], data["action"])
-                elif data["action"] == "project_ready":
-                    await self.project_ready(data["value"], data["action"])
-                elif data["action"] == "hw_discovery":
-                    await self.hw_discovery(data["action"])
-                elif data["action"] == "project_deploy":
-                    await self.project_deploy(data["value"], data["action"])
-                elif data["action"] == "project_new":
-                    await self.received_new_project(data["value"], data["action"], data["unix_name"])
-                elif data["action"] == "project_save":
-                    await self.received_project(data["value"], data["action"])
-                elif data["action"] == "project_delete":
-                    await self.request_delete_project(data["value"], data["action"])
-                elif data["action"] == "project_restore":
-                    await self.request_restore_project(data["value"], data["action"])
-                elif data["action"] == "project_trash_delete":
-                    await self.request_delete_project_trash(data["value"], data["action"])
-                elif data["action"] == "project_list":
-                    await self.list_project(data["action"])
-                elif data["action"] == "project_duplicate":
-                    await self.request_duplicate_project(data["value"], data["action"])
-                elif data["action"] == "file_list":
-                    await self.list_file(data["action"])
-                elif data["action"] == "project_trash_list":
-                    await self.list_project_trash(data["action"])
-                elif data["action"] == "file_trash_list":
-                    await self.list_file_trash(data["action"])
-                elif data["action"] == "file_save":
-                    await self.received_file_data(data["value"], data["action"])
-                elif data["action"] == "file_load_meta":
-                    await self.request_file_load_meta(data["value"], data["action"])
-                elif data["action"] == "file_load_thumbnail":
-                    await self.request_file_load_thumbnail(data["value"], data["action"])
-                elif data["action"] == "file_load_waveform":
-                    await self.request_file_load_waveform(data["value"], data["action"])
-                elif data["action"] == "file_delete":
-                    await self.request_delete_file(data["value"], data["action"])
-                elif data["action"] == "file_restore":
-                    await self.request_restore_file(data["value"], data["action"])
-                elif data["action"] == "file_trash_delete":
-                    await self.request_delete_file_trash(data["value"], data["action"])
+                action = data.get("action")
+                value = data.get("value")
+                if not action:
+                    Logger.error(f"unsupported event: {data}")
+                    await self.notify_error_to_user(f"unsupported event: {data}")
+                    return
+
+                action_map = {
+                    "project_load": lambda: self.send_project(value, action),
+                    "project_ready": lambda: self.project_ready(value, action),
+                    "hw_discovery": lambda: self.hw_discovery(action),
+                    "project_deploy": lambda: self.project_deploy(value, action),
+                    "project_new": lambda: self.received_new_project(value, action, data.get("unix_name")),
+                    "project_save": lambda: self.received_project(value, action),
+                    "project_delete": lambda: self.request_delete_project(value, action),
+                    "project_restore": lambda: self.request_restore_project(value, action),
+                    "project_trash_delete": lambda: self.request_delete_project_trash(value, action),
+                    "project_list": lambda: self.list_project(action),
+                    "project_duplicate": lambda: self.request_duplicate_project(value, action),
+                    "file_list": lambda: self.list_file(action),
+                    "project_trash_list": lambda: self.list_project_trash(action),
+                    "file_trash_list": lambda: self.list_file_trash(action),
+                    "file_save": lambda: self.received_file_data(value, action),
+                    "file_load_meta": lambda: self.request_file_load_meta(value, action),
+                    "file_load_thumbnail": lambda: self.request_file_load_thumbnail(value, action),
+                    "file_load_waveform": lambda: self.request_file_load_waveform(value, action),
+                    "file_delete": lambda: self.request_delete_file(value, action),
+                    "file_restore": lambda: self.request_restore_file(value, action),
+                    "file_trash_delete": lambda: self.request_delete_file_trash(value, action),
+                }
+
+                if action in action_map:
+                    await action_map[action]()
                 else:
-                    Logger.error("unsupported action: {}".format(data))
-                    await self.notify_error_to_user("unsupported action: {}".format(data))
+                    Logger.error(f"unsupported action: {data}")
+                    await self.notify_error_to_user(f"unsupported action: {data}")
             except KeyError as e:
                 Logger.error("error missing key:  {}".format(e))
                 await self.notify_error_to_user('error missing key {} in request'.format(e))
