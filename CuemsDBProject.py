@@ -1,7 +1,7 @@
 import os
 import traceback
 import shutil
-from peewee import DoesNotExist, IntegrityError
+from peewee import DoesNotExist, IntegrityError, prefetch
 
 from cuemsutils.tools.StringSanitizer import StringSanitizer
 from cuemsutils.tools.CopyMoveVersioned import CopyMoveVersioned
@@ -14,19 +14,25 @@ from cuemsutils.log import logged, Logger
 from CuemsErrors import *
 from CuemsDBModel import Project, Media, ProjectMedia
 
-SCRIPT_FILE_NAME = 'script.xml'
-PROJECT_FOLDER_NAME = 'projects'
-TRASH_FOLDER_NAME = 'trash'
+
 
 
 class CuemsDBProject(StringSanitizer):
 
-    def __init__(self, library_path, xsd_path, db_connection):
-        self.library_path = library_path
-        self.xsd_path = xsd_path
+    def __init__(self, settings_dict, db_connection):
         self.db = db_connection
-        self.projects_path = os.path.join(self.library_path, PROJECT_FOLDER_NAME)
-        self.trash_path = os.path.join(self.library_path, TRASH_FOLDER_NAME, PROJECT_FOLDER_NAME)
+        self.settings_dict = settings_dict
+        try:
+            self.tmp_path = self.settings_dict['tmp_path']
+            self.library_path = settings_dict['library_path']
+            self.script_file_name = settings_dict['script_file_name']
+            self.script_schema_name = settings_dict['script_schema_name']
+            self.projects_path = os.path.join(self.library_path, settings_dict['project_folder_name'])
+            self.trash_path = os.path.join(self.library_path, settings_dict['trash_folder_name'], settings_dict['project_folder_name'])
+            self.media_path = os.path.join(self.library_path, settings_dict['media_folder_name'])
+        except KeyError as e:
+            Logger.error(f'can not read settings {e}')
+            raise e
     
     
     def get_project_unix_name(self, uuid):
@@ -313,12 +319,12 @@ class CuemsDBProject(StringSanitizer):
 
     def save_xml(self, unix_name, project_object):
 
-        writer = XmlReaderWriter(schema_name = self.xsd_path, xmlfile = (os.path.join(self.projects_path, unix_name, SCRIPT_FILE_NAME)))
+        writer = XmlReaderWriter(schema_name = self.script_schema_name, xmlfile = (os.path.join(self.projects_path, unix_name, self.script_file_name)))
         writer.write_from_object(project_object)
 
 
     def load_xml(self, unix_name):
-        reader = XmlReaderWriter(schema_name = self.xsd_path, xmlfile = (os.path.join(self.projects_path, unix_name, SCRIPT_FILE_NAME)))
+        reader = XmlReaderWriter(schema_name = self.script_schema_name, xmlfile = (os.path.join(self.projects_path, unix_name, self.script_file_name)))
         return reader.read()
 
             

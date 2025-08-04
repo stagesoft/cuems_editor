@@ -14,7 +14,16 @@ settings_dict['session_uuid'] = str(uuid.uuid1())
 settings_dict['library_path'] = '/opt/cuems_library'
 settings_dict['tmp_path'] = '/tmp/cuems'
 settings_dict['database_name'] = 'project-manager.db'
-
+settings_dict['project_folder_name'] = 'projects'
+settings_dict['script_file_name'] = 'script.xml'
+settings_dict['script_schema_name'] = 'script'
+settings_dict['media_folder_name'] = 'media'
+settings_dict['trash_folder_name'] = 'trash'
+settings_dict['thumbnail_folder_name'] = 'thumbnails'
+settings_dict['waveform_folder_name'] = 'waveforms'
+settings_dict['thumbnail_extension'] = '.png'
+settings_dict['waveform_extension'] = '.dat'
+settings_dict['thumbnail_size'] = (240, 240)  # width, height
 
 mappings_dict = {'number_of_nodes': 1, 'default_audio_input': '0367f391-ebf4-48b2-9f26-000000000001_system:capture_1', 'default_audio_output': '0367f391-ebf4-48b2-9f26-000000000001_system:playback_1', 'default_video_input': None, 'default_video_output': '0367f391-ebf4-48b2-9f26-000000000001_0', 'default_dmx_input': None, 'default_dmx_output': None, 'nodes': [{'uuid': '0367f391-ebf4-48b2-9f26-000000000001', 'mac': '2cf05d21cca3', 'audio': {'outputs': [{'name': 'system:playback_1', 'mappings': [{'mapped_to': 'system:playback_1'}]}, {'name': 'system:playback_2', 'mappings': [{'mapped_to': 'system:playback_2'}]}], 'inputs': [{'name': 'system:capture_1', 'mappings': [{'mapped_to': 'system:capture_1'}]}, {'name': 'system:capture_2', 'mappings': [{'mapped_to': 'system:capture_2'}]}]}, 'video': {'outputs': [{'name': '0', 'mappings': [{'mapped_to': '0'}]}]}, 'dmx': None}]}
 

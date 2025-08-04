@@ -25,7 +25,7 @@ class CuemsUpload(StringSanitizer):
     def __init__(self, server, websocket):
         self.server = server
         self.websocket = websocket
-        self.tmp_path = self.server.tmp_path
+        self.tmp_path = self.server.settings_dict['tmp_path']
         self.media_path = self.server.db.media.media_path
         
     async def message_handler(self):

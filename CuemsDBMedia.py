@@ -19,16 +19,7 @@ from CuemsDBModel import Project, Media, ProjectMedia
 from CuemsErrors import *
 
 
-SCRIPT_FILE_NAME = 'script.xml'
-PROJECT_FOLDER_NAME = 'projects'
-MEDIA_FOLDER_NAME = 'media'
-TRASH_FOLDER_NAME = 'trash'
-THUMBNAIL_FOLDER_NAME = 'thumbnails'
-WAVEFORM_FOLDER_NAME = 'waveforms'
-THUMBNAIL_EXTENSION = '.png'
-WAVEFORM_EXTENSION = '.dat'
-THUMBNAIL_W = 240
-THUMBNAIL_H = 240
+
 
 class MediaType(Enum):
     MOVIE = auto()
@@ -38,16 +29,22 @@ class MediaType(Enum):
 
 class CuemsDBMedia(StringSanitizer):
 
-    def __init__(self, library_path, tmp_path, db_connection):
-        self.library_path = library_path
-        self.tmp_path = tmp_path
+    def __init__(self, settings_dict, db_connection):
         self.db = db_connection
-        self.media_path = os.path.join(self.library_path, MEDIA_FOLDER_NAME)
-        self.trash_path = os.path.join(self.library_path, TRASH_FOLDER_NAME, MEDIA_FOLDER_NAME)
-        self.thumbnail_path = os.path.join(self.media_path, THUMBNAIL_FOLDER_NAME)
-        self.waveform_path = os.path.join(self.media_path, WAVEFORM_FOLDER_NAME)
-        self.thumbnail_trash_path = os.path.join(self.trash_path, THUMBNAIL_FOLDER_NAME)
-        self.waveform_trash_path = os.path.join(self.trash_path, WAVEFORM_FOLDER_NAME)
+        try:
+            self.library_path = settings_dict['library_path']
+            self.tmp_path = settings_dict['tmp_path']
+            self.media_path = os.path.join(self.library_path, settings_dict['media_folder_name'])
+            self.trash_path = os.path.join(self.library_path, settings_dict['trash_folder_name'], settings_dict['media_folder_name'])
+            self.thumbnail_path = os.path.join(self.media_path, settings_dict['thumbnail_folder_name'])
+            self.waveform_path = os.path.join(self.media_path, settings_dict['waveform_folder_name'])
+            self.thumbnail_trash_path = os.path.join(self.trash_path, settings_dict['thumbnail_folder_name'])
+            self.waveform_trash_path = os.path.join(self.trash_path, settings_dict['waveform_folder_name'])
+            self.thumbnail_extension = settings_dict['thumbnail_extension']
+            self.waveform_extension = settings_dict['waveform_extension']
+            self.thumbnail_size = settings_dict['thumbnail_size']
+        except KeyError as e:
+            Logger.error(f'can not read settings {e}')
 
     def new(self, tmp_file_path, filename):
         with self.db.atomic() as transaction:
@@ -426,11 +423,11 @@ class CuemsDBMedia(StringSanitizer):
         file_path = self.get_file_path(filename)
         thumbnail_file_path = self.get_thumbnail_path(filename)
         if duration is None:
-            result = subprocess.run(['ffmpeg', '-y', '-hide_banner', '-loglevel', 'warning', '-i', file_path, '-vf', f'scale={str(THUMBNAIL_W)}:-1', '-frames:v', '1', '-update', 'true', thumbnail_file_path], stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+            result = subprocess.run(['ffmpeg', '-y', '-hide_banner', '-loglevel', 'warning', '-i', file_path, '-vf', f'scale={str(self.thumbnail_size[0])}:-1', '-frames:v', '1', '-update', 'true', thumbnail_file_path], stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
         else:
             time_option = "-ss"
             timecode = f'200ms'
-            result = subprocess.run(['ffmpeg', time_option, timecode, '-y', '-hide_banner', '-loglevel', 'warning', '-i', file_path, '-vf', f'scale={str(THUMBNAIL_W)}:-1', '-vframes', '1', '-update', 'true', thumbnail_file_path], stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+            result = subprocess.run(['ffmpeg', time_option, timecode, '-y', '-hide_banner', '-loglevel', 'warning', '-i', file_path, '-vf', f'scale={str(self.thumbnail_size[0])}:-1', '-vframes', '1', '-update', 'true', thumbnail_file_path], stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
         
         if os.path.exists(thumbnail_file_path):
             Logger.debug(f'thumbnail file created for {filename}, output: {result.stdout.decode("utf8")}')
@@ -445,7 +442,7 @@ class CuemsDBMedia(StringSanitizer):
         file_path = self.get_file_path(filename)
         thumbnail_file_path = self.get_thumbnail_path(filename)
         #TODO: support 24-bit data
-        result = subprocess.run(['audiowaveform', '-i', file_path, '-o', thumbnail_file_path, '-e', str(duration.milliseconds/1000), '-w', str(THUMBNAIL_W), '-h', str(THUMBNAIL_H), '--no-axis-labels', '--amplitude-scale', '0.9'], stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        result = subprocess.run(['audiowaveform', '-i', file_path, '-o', thumbnail_file_path, '-e', str(duration.milliseconds/1000), '-w', str(self.thumbnail_size[0]), '-h', str(self.thumbnail_size[1]), '--no-axis-labels', '--amplitude-scale', '0.9'], stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
         
         if os.path.exists(thumbnail_file_path):
             return thumbnail_file_path
@@ -471,7 +468,7 @@ class CuemsDBMedia(StringSanitizer):
 
     def get_thumbnail_filename(self, filename):
         name_root, file_extension = os.path.splitext(filename)
-        thumbnail_file_name = f'{name_root}_{file_extension[1:]}{THUMBNAIL_EXTENSION}'
+        thumbnail_file_name = f'{name_root}_{file_extension[1:]}{self.thumbnail_extension}'
         return thumbnail_file_name
 
     def get_thumbnail_path(self, filename, trash_state=False):
@@ -484,7 +481,7 @@ class CuemsDBMedia(StringSanitizer):
 
     def get_waveform_filename(self, filename):
         name_root, file_extension = os.path.splitext(filename)
-        waveform_file_name = f'{name_root}_{file_extension[1:]}{WAVEFORM_EXTENSION}'
+        waveform_file_name = f'{name_root}_{file_extension[1:]}{self.waveform_extension}'
         return waveform_file_name
 
     def get_waveform_path(self, filename, trash_state=False):

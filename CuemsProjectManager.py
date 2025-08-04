@@ -24,15 +24,15 @@ class CuemsDBManager():
     
     def __init__(self,settings_dict):
 
+        self.settings_dict = settings_dict
+
         try:
-            self.library_path = settings_dict['library_path']
             self.db_name = settings_dict['database_name']
-            self.tmp_path = settings_dict['tmp_path']
+            self.library_path = settings_dict['library_path']
         except KeyError as e:
             Logger.error(f'can not read settings {e}')
-            raise e
+            raise 
 
-        self.xsd_path = "script"
         self.db_path = os.path.join(self.library_path, self.db_name)
         self.models = [Project, Media,  ProjectMedia]
         database.init(self.db_path)
@@ -45,8 +45,8 @@ class CuemsDBManager():
                 Logger.warning(f'table "{model._meta.table_name	}" does not exist, creating') # pylint: disable=maybe-no-member
         # safe=True uses IF NOT EXIST on table create
         database.create_tables( self.models, safe=True) 
-        self.project = CuemsDBProject(self.library_path, self.xsd_path, database)
-        self.media = CuemsDBMedia(self.library_path, self.tmp_path, database)
+        self.project = CuemsDBProject(self.settings_dict, database)
+        self.media = CuemsDBMedia(self.settings_dict, database)
  
 
 
