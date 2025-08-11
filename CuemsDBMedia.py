@@ -122,7 +122,7 @@ class CuemsDBMedia(StringSanitizer):
         .join(ProjectMedia, JOIN.LEFT_OUTER)  # Joins tweet -> favorite.
         .join(Project, JOIN.LEFT_OUTER, on=(Project.uuid==ProjectMedia.project))  # Joins user -> tweet.
         .where((Media.in_trash==False))
-        .group_by(Media))
+        .group_by(Media).order_by(Media.created.desc()))
         
        
         medias = prefetch(
@@ -153,7 +153,7 @@ class CuemsDBMedia(StringSanitizer):
          .join(ProjectMedia, JOIN.LEFT_OUTER)  # Joins tweet -> favorite.
          .join(Project, JOIN.LEFT_OUTER, on=(Project.uuid==ProjectMedia.project))  # Joins user -> tweet.
          .where(Media.in_trash==True)
-         .group_by(Media.uuid))
+         .group_by(Media.uuid).order_by(Media.created.desc()))
         for media in medias:
             media_dict = {str(media.uuid): {'name': media.name, 'unix_name': media.unix_name, 'created': media.created, 'modified': media.modified, 'type': media.media_type, "in_projects": media.in_project_count, "in_trash_projects" : media.in_project_trash_count} }
             media_list.append(media_dict)
