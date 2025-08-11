@@ -54,7 +54,7 @@ class CuemsDBProject(StringSanitizer):
 
     def list(self):
         project_list = list()
-        projects = Project.select().where(Project.in_trash == False)
+        projects = Project.select().where(Project.in_trash == False).order_by(Project.created.desc())
         for project in projects:
             project_dict = {str(project.uuid): {'name': project.name, 'unix_name': project.unix_name, 'created': project.created, 'modified': project.modified} }
             project_list.append(project_dict)
@@ -63,7 +63,7 @@ class CuemsDBProject(StringSanitizer):
     
     def list_trash(self):
         project_trash_list = list()
-        projects_trash = Project.select().where(Project.in_trash == True)
+        projects_trash = Project.select().where(Project.in_trash == True).order_by(Project.created.desc())
         for project in projects_trash:
             project_dict = {str(project.uuid): {'name': project.name, 'unix_name': project.unix_name, 'created': project.created, 'modified': project.modified} }
             project_trash_list.append(project_dict)
