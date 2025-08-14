@@ -1,11 +1,15 @@
 import json
 import asyncio
+from datetime import datetime, timedelta
 from cuemsutils.helpers import new_uuid, new_datetime
 import websockets as ws
 
 from cuemsutils.log import logged, Logger
 
 from CuemsErrors import *
+
+TIMEOUT = 25 #TODO: make it configurable, or get from settings
+
 
 class CuemsWsUser():
     
@@ -91,25 +95,24 @@ class CuemsWsUser():
     async def comunicate_with_engine(self, action, action_uuid, engine_command):
         try:
             try:
-                response = await self.server.engine_communicator.send_request(engine_command)
+                async with asyncio.timeout(TIMEOUT):
+                    response = await self.server.engine_communicator.send_request(engine_command)
+            except TimeoutError:
+                raise EngineError(f' Timeout Erro: Engine did not respond in 30 secs for {action} action with uuid {action_uuid}')
             except Exception as e:
-                raise EngineError(f'can not connect to engine: {e}')
-            start_time = new_datetime()
-            while True:
-                time_delta = new_datetime() - start_time
-                if time_delta.total_seconds() >= 30: #TODO: decide timeout, or get it from settings?
-                    raise TimeoutError(f'Timeout waiting {action} response from engine')
-                if response:
-                    
-                        if "action_uuid" in response:
-                            if action_uuid in response['action_uuid']:
-                                if 'type'  not in response:
-                                    raise EngineError(f'Engine reports error {response}')
-                                if response['type'] != action or response['value'] != 'OK':
-                                    raise EngineError(f'Engine reports error {response}')
-                                return response['value']
-                
-                await asyncio.sleep(0.25)
+                raise EngineError(f'can not connect to engine: {e}, {type(e)})')
+
+            if response:
+                    Logger.debug(f'got response from engine {response}')
+                    if "action_uuid" in response:
+                        if action_uuid in response['action_uuid']:
+                            if 'type'  not in response:
+                                raise EngineError(f'Engine reports error {response}')
+                            if response['type'] != action or response['value'] != 'OK':
+                                raise EngineError(f'Engine reports error {response}')
+                            Logger.debug(f'Engine response for {action} is OK')
+                            return response['value']
+            
 
         except Exception as e:
             raise e
@@ -139,6 +142,7 @@ class CuemsWsUser():
             engine_command = {"action" : "project_ready", "action_uuid": action_uuid, "value" : unix_name}
 
             result = await self.comunicate_with_engine(action, action_uuid, engine_command)
+            Logger.debug(f"project {project_uuid} ready: {result}")
 
             await self.outgoing.put(json.dumps({"type": "project_ready", "value": project_uuid}))
 
@@ -150,7 +154,7 @@ class CuemsWsUser():
         Logger.info(f"user {id(self.websocket)} requesting hardware dicovery")
         try:
             action_uuid = str(new_uuid())
-            engine_command = {"action" : "hw_discovery", "action_uuid": action_uuid}
+            engine_command = {"action" : "hw_discovery", "action_uuid": action_uuid, 'value' : 'rescan'}
 
             result = await self.comunicate_with_engine(action, action_uuid, engine_command)
 

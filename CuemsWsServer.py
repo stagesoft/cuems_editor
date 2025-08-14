@@ -25,7 +25,7 @@ from cuemsutils.create_script import create_script, new_uuid
 class CuemsWsServer():
     
     def __init__(self, settings_dict, mappings_dict ):
-        self.engine_communicator = Communicator(address="/tmp/test1.sock")  
+        self.engine_communicator = Communicator(address=settings_dict['editor_ipc'])  
         #self.engine_queue = Comunicator(address="ipc:///tmp/test2.sock")
         self.engine_messages = list()
         self.users = dict()
