@@ -112,6 +112,8 @@ class CuemsWsUser():
                                 raise EngineError(f'Engine reports error {response}')
                             Logger.debug(f'Engine response for {action} is OK')
                             return response['value']
+            else:
+                raise EngineError(f'Engine did not respond with valid response')
             
 
         except Exception as e:
@@ -154,7 +156,7 @@ class CuemsWsUser():
         Logger.info(f"user {id(self.websocket)} requesting hardware dicovery")
         try:
             action_uuid = str(new_uuid())
-            engine_command = {"action" : "hw_discovery", "action_uuid": action_uuid, 'value' : 'rescan'}
+            engine_command = {"action" : "hw_discovery", "action_uuid": action_uuid}
 
             result = await self.comunicate_with_engine(action, action_uuid, engine_command)
 
