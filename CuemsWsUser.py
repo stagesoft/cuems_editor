@@ -3,6 +3,7 @@ import asyncio
 from datetime import datetime, timedelta
 from cuemsutils.helpers import new_uuid, new_datetime
 import websockets as ws
+import sys
 
 from cuemsutils.log import logged, Logger
 
@@ -10,6 +11,7 @@ from CuemsErrors import *
 
 TIMEOUT = 25 #TODO: make it configurable, or get from settings
 
+functionNameAsString = lambda n=0: sys._getframe(n + 1).f_code.co_name
 
 class CuemsWsUser():
     
@@ -59,7 +61,6 @@ class CuemsWsUser():
                 action_map = {
                     "project_load": lambda: self.send_project(value, action),
                     "project_ready": lambda: self.project_ready(value, action),
-                    "hw_discovery": lambda: self.hw_discovery(action),
                     "project_deploy": lambda: self.project_deploy(value, action),
                     "project_new": lambda: self.received_new_project(value, action, data.get("unix_name")),
                     "project_save": lambda: self.received_project(value, action),
@@ -78,6 +79,8 @@ class CuemsWsUser():
                     "file_delete": lambda: self.request_delete_file(value, action),
                     "file_restore": lambda: self.request_restore_file(value, action),
                     "file_trash_delete": lambda: self.request_delete_file_trash(value, action),
+                    "hw_discovery": lambda: self.hw_discovery(action),
+                    "nodeconf": lambda: self.nodeconf(action),
                 }
 
                 if action in action_map:
@@ -104,14 +107,17 @@ class CuemsWsUser():
 
             if response:
                     Logger.debug(f'got response from engine {response}')
-                    if "action_uuid" in response:
+                    if "action_uuid" in response.keys():
                         if action_uuid in response['action_uuid']:
                             if 'type'  not in response:
                                 raise EngineError(f'Engine reports error {response}')
                             if response['type'] != action or response['value'] != 'OK':
-                                raise EngineError(f'Engine reports error {response}')
+                                raise EngineError(f'Engine reports error {response["value"]}')
                             Logger.debug(f'Engine response for {action} is OK')
                             return response['value']
+                    else:
+                        raise EngineError(f'Engine reports error {response}')
+
             else:
                 raise EngineError(f'Engine did not respond with valid response')
             
@@ -141,26 +147,40 @@ class CuemsWsUser():
         try:
             unix_name = await self.server.event_loop.run_in_executor(self.server.executor, self.server.db.project.get_project_unix_name, project_uuid)
             action_uuid = str(new_uuid())
-            engine_command = {"action" : "project_ready", "action_uuid": action_uuid, "value" : unix_name}
+            engine_command = {"action" : functionNameAsString(), "action_uuid": action_uuid, "value" : unix_name}
 
             result = await self.comunicate_with_engine(action, action_uuid, engine_command)
             Logger.debug(f"project {project_uuid} ready: {result}")
 
-            await self.outgoing.put(json.dumps({"type": "project_ready", "value": project_uuid}))
+            await self.outgoing.put(json.dumps({"type": functionNameAsString(), "value": project_uuid}))
 
         except Exception as e:
             Logger.error(f"error: {type(e)} {e}")
             await self.notify_error_to_user(str(e), uuid=project_uuid, action=action )
 
     async def hw_discovery(self, action):
-        Logger.info(f"user {id(self.websocket)} requesting hardware dicovery")
+        Logger.info(f"user {id(self.websocket)} requesting {functionNameAsString()} dicovery")
         try:
             action_uuid = str(new_uuid())
-            engine_command = {"action" : "hw_discovery", "action_uuid": action_uuid}
+            engine_command = {"action" : functionNameAsString(), "action_uuid": action_uuid}
 
             result = await self.comunicate_with_engine(action, action_uuid, engine_command)
 
-            await self.outgoing.put(json.dumps({"type": "hw_discovery", "value": result}))
+            await self.outgoing.put(json.dumps({"type": functionNameAsString(), "value": result}))
+
+        except Exception as e:
+            Logger.error("error: {} {}".format(type(e), e))
+            await self.notify_error_to_user(str(e), action=action )
+
+    async def nodeconf(self, action):
+        Logger.info(f"user {id(self.websocket)} requesting {functionNameAsString()} dicovery")
+        try:
+            action_uuid = str(new_uuid())
+            engine_command = {"action" : functionNameAsString(), "action_uuid": action_uuid}
+
+            result = await self.comunicate_with_engine(action, action_uuid, engine_command)
+
+            await self.outgoing.put(json.dumps({"type": functionNameAsString(), "value": result}))
 
         except Exception as e:
             Logger.error("error: {} {}".format(type(e), e))
@@ -171,11 +191,11 @@ class CuemsWsUser():
         try:
             unix_name = await self.server.event_loop.run_in_executor(self.server.executor, self.server.db.project.get_project_unix_name, project_uuid)
             action_uuid = str(new_uuid())
-            engine_command = {"action" : "project_deploy", "action_uuid": action_uuid, "value" : unix_name}
+            engine_command = {"action" : functionNameAsString(), "action_uuid": action_uuid, "value" : unix_name}
 
             result = await self.comunicate_with_engine(action, action_uuid, engine_command)
 
-            await self.outgoing.put(json.dumps({"type": "project_deploy", "value": project_uuid}))
+            await self.outgoing.put(json.dumps({"type": functionNameAsString(), "value": project_uuid}))
 
         except Exception as e:
             Logger.error(f"error: {type(e)} {e}")
