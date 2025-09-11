@@ -91,6 +91,7 @@ class CuemsDBProject(StringSanitizer):
                 project.save()
                 project_object = CuemsParser(data).parse()
                 self.update_media_relations(project, project_object)
+                self.add_media_durations(project, project_object)
                 self.save_xml(project.unix_name, project_object)
             except Exception as e:
                 Logger.error("error: {} {} triying to update  project, rolling back database update".format(type(e), e))
@@ -127,6 +128,7 @@ class CuemsDBProject(StringSanitizer):
                 project_object = CuemsParser(data).parse()
                 Logger.debug(f'project_object is now: {type(project_object)},{project_object}')
                 self.add_media_relations(project, project_object)
+                self.add_media_durations(project, project_object)
                 self.save_xml(unix_name, project_object)
                 return project_uuid
             except IntegrityError as e:
@@ -237,6 +239,14 @@ class CuemsDBProject(StringSanitizer):
         except DoesNotExist:
             raise NonExistentItemError("item with uuid: {} does not exist".format(uuid))
 
+    def add_media_durations(self, project, project_object):
+        media_dict = project_object.get_media()
+        for cue_uuid, media_object in media_dict.items(): 
+            for media_uiid, project_media_filename in media_object.items():
+                media_db = Media.get(Media.unix_name==project_media_filename)
+                project_object.find(cue_uuid).media.duration = media_db.duration
+
+            
     def add_media_relations(self, project, project_object):
         media_filenames_list = project_object.get_media_filenames()
         for media_name in media_filenames_list:

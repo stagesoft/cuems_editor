@@ -19,13 +19,13 @@ from CuemsErrors import *
 
 from cuemsutils.tools.CommunicatorServices import Communicator
 from cuemsutils.create_script import create_script, new_uuid
-
+from cuemsutils.log import logged, Logger
 
 
 class CuemsWsServer():
     
     def __init__(self, settings_dict, mappings_dict ):
-        self.engine_communicator = Communicator(address=settings_dict['editor_ipc'])  
+        self.engine_communicator = Communicator(address=settings_dict['editor_ipc'])
         #self.engine_queue = Comunicator(address="ipc:///tmp/test2.sock")
         self.engine_messages = list()
         self.users = dict()
@@ -47,7 +47,7 @@ class CuemsWsServer():
             raise FileNotFoundError('Can not access upload folder')
 
 
-    def start(self, port):
+    def start(self, port=9092):
         self.port = port
         self.host = 'localhost'
         newfeature = asyncio.get_event_loop().run_until_complete(self.run_async_server())
