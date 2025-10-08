@@ -151,17 +151,17 @@ class CuemsDBProject(StringSanitizer):
                     project_path = os.path.join(self.projects_path, project.unix_name)
                     new_unix_name = CopyMoveVersioned.copy_dir(project_path, self.projects_path, project.unix_name)
                     project.unix_name = new_unix_name
-                    new_uuid = str(new_uuid())
-                    project.uuid = new_uuid
+                    new_project_uuid = str(new_uuid())
+                    project.uuid = new_project_uuid
                     project.name = project.name + ' - Copy'
                     project.modified=new_datetime()
                     project.save(force_insert=True)
 
-                    dup_project= Project.get(Project.uuid==new_uuid)
+                    dup_project= Project.get(Project.uuid==new_project_uuid)
                     data = self.load_xml(dup_project.unix_name)
                     project_object = CuemsParser(data).parse()
                     self.add_media_relations(dup_project, project_object)
-                    return new_uuid
+                    return new_project_uuid
                 except Exception as e:
                     Logger.error("error: {} {}; trying to duplicate  project, rolling back database update".format(type(e), e))
                     transaction.rollback()
