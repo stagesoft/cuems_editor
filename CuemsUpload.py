@@ -69,8 +69,8 @@ class CuemsUpload(StringSanitizer):
             self.uploading = 'Ready'
             await self.message_sender(json.dumps({"ready" : True}))
         else:
-            await self.message_sender(json.dumps({'error' : 'file allready exists', 'fatal': True}))
-            Logger.error("file allready exists")
+            await self.message_sender(json.dumps({'error' : 'file already exists', 'fatal': True}))
+            Logger.error("file already exists")
 
     async def process_upload_packet(self, bin_data):
 

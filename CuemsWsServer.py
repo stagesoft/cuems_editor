@@ -92,7 +92,7 @@ class CuemsWsServer():
         elif path == '/upload':                            # file upload
             await self.upload_session(websocket)
         else:
-            Logger.info("unknow path: {}".format(path))
+            Logger.info("unknown path: {}".format(path))
 
     async def project_manager_session(self, websocket, path):
         user_session = CuemsWsUser(self, websocket)

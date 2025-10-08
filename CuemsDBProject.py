@@ -93,7 +93,7 @@ class CuemsDBProject(StringSanitizer):
                 self.update_media_relations(project, project_object)
                 self.save_xml(project.unix_name, project_object)
             except Exception as e:
-                Logger.error("error: {} {} triying to update  project, rolling back database update".format(type(e), e))
+                Logger.error("error: {} {} trying to update  project, rolling back database update".format(type(e), e))
                 transaction.rollback()
                 raise e
             
@@ -113,10 +113,10 @@ class CuemsDBProject(StringSanitizer):
             data['CuemsScript']['created'] = now
             data['CuemsScript']['modified'] = now
         except KeyError as e:
-            Logger.error("error: Missing {} ;triying to make new  project, rolling back database insert".format(e))
+            Logger.error("error: Missing {} ;trying to make new  project, rolling back database insert".format(e))
             raise e
         except Exception as e:
-            Logger.error("error: {} {} ;triying to read  project data".format(type(e), e))
+            Logger.error("error: {} {} ;trying to read  project data".format(type(e), e))
             raise e
 
         with self.db.atomic() as transaction:
@@ -131,11 +131,11 @@ class CuemsDBProject(StringSanitizer):
                 return project_uuid
             except IntegrityError as e:
                 transaction.rollback()
-                Logger.error("error: {} {} ;name or unix_name allready exists, rolling back database insert".format(type(e), e))
+                Logger.error("error: {} {} ;name or unix_name already exists, rolling back database insert".format(type(e), e))
                 raise e
             except Exception as e:
                 transaction.rollback()
-                Logger.error("error: {} {} ;triying to make new  project, rolling back database insert".format(type(e), e))
+                Logger.error("error: {} {} ;trying to make new  project, rolling back database insert".format(type(e), e))
                 
                 if os.path.exists(os.path.join(self.projects_path, unix_name)):
                     shutil.rmtree(os.path.join(self.projects_path, unix_name) )
@@ -163,9 +163,9 @@ class CuemsDBProject(StringSanitizer):
                     self.add_media_relations(dup_project, project_object)
                     return new_uuid
                 except Exception as e:
-                    Logger.error("error: {} {}; triying to duplicate  project, rolling back database update".format(type(e), e))
+                    Logger.error("error: {} {}; trying to duplicate  project, rolling back database update".format(type(e), e))
                     transaction.rollback()
-                    if new_unix_name is None:  # if move or copy where not sucessfull with dont need to clean and can end here forwarding the exception, else continue cleaning and then forward the exception
+                    if new_unix_name is None:  # if move or copy where not successful with don't need to clean and can end here forwarding the exception, else continue cleaning and then forward the exception
                         raise e
                     if os.path.exists(os.path.join(self.projects_path, new_unix_name)):
                         shutil.rmtree(os.path.join(self.projects_path, new_unix_name))
@@ -186,9 +186,9 @@ class CuemsDBProject(StringSanitizer):
                     project.save()
                     Logger.debug('updating instance in db: {}'.format(project))
                 except Exception as e:
-                    Logger.error("error: {} {}; triying to move file to trash, rolling back database".format(type(e), e))
+                    Logger.error("error: {} {}; trying to move file to trash, rolling back database".format(type(e), e))
                     transaction.rollback()
-                    if dest_filename is None:  # if move or copy where not sucessfull with dont need to clean and can end here forwarding the exception, else continue cleaning and then forward the exception
+                    if dest_filename is None:  # if move or copy where not successful with don't need to clean and can end here forwarding the exception, else continue cleaning and then forward the exception
                         raise e
                     if os.path.exists(os.path.join(self.trash_path, dest_filename)):
                         shutil.move( os.path.join(self.trash_path, dest_filename), os.path.join(self.projects_path, project.unix_name))
@@ -210,9 +210,9 @@ class CuemsDBProject(StringSanitizer):
                     project_trash.save()
                     Logger.debug('updating instance in db: {}'.format(project_trash))
                 except Exception as e:
-                    Logger.error("error: {} {}; triying to move file to trash, rolling back database".format(type(e), e))
+                    Logger.error("error: {} {}; trying to move file to trash, rolling back database".format(type(e), e))
                     transaction.rollback()
-                    if dest_filename is None:  # if move or copy where not sucessfull with dont need to clean and can end here forwarding the exception, else continue cleaning and then forward the exception
+                    if dest_filename is None:  # if move or copy where not successful with don't need to clean and can end here forwarding the exception, else continue cleaning and then forward the exception
                         raise e
                     if os.path.exists(os.path.join(self.projects_path, dest_filename)):
                         shutil.move( os.path.join(self.projects_path, dest_filename), os.path.join(self.trash_path, project_path.unix_name))
@@ -231,7 +231,7 @@ class CuemsDBProject(StringSanitizer):
                     shutil.rmtree(project_path)  #non empty dir, must use rmtree
                     Logger.debug('deleting project from trash: {}'.format(project))
                 except Exception as e:
-                    Logger.error("error: {} {}; triying to delete project to trash, rolling back database".format(type(e), e))
+                    Logger.error("error: {} {}; trying to delete project to trash, rolling back database".format(type(e), e))
                     transaction.rollback()
                     raise e
         except DoesNotExist:
@@ -307,7 +307,7 @@ class CuemsDBProject(StringSanitizer):
                     try:
                         Media.update(uuid=old_media_uuid).where(Media.unix_name == media_filename).execute()
                     except Exception as e:
-                        Logger.error("error: {} {}; triying to update media uuid, rolling back database update".format(type(e), e))
+                        Logger.error("error: {} {}; trying to update media uuid, rolling back database update".format(type(e), e))
                         transaction.rollback()
                         raise e
             except DoesNotExist:

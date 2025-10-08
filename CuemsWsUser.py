@@ -101,7 +101,7 @@ class CuemsWsUser():
                 async with asyncio.timeout(TIMEOUT):
                     response = await self.server.engine_communicator.send_request(engine_command)
             except TimeoutError:
-                raise EngineError(f' Timeout Erro: Engine did not respond in 30 secs for {action} action with uuid {action_uuid}')
+                raise EngineError(f' Timeout Error: Engine did not respond in {TIMEOUT} secs for {action} action with uuid {action_uuid}')
             except Exception as e:
                 raise EngineError(f'can not connect to engine: {e}, {type(e)})')
 
