@@ -1,7 +1,8 @@
 
 
 from cuemsutils.log import Logger, logged
-from cuemsutils.tools.ConfigManager import ConfigManager, ProjectMappings
+from cuemsutils.tools.ConfigManager import ConfigManager
+from cuemsutils.xml.Settings import ProjectMappings
 from CuemsWsServer import CuemsWsServer
 
 from multiprocessing import Queue
