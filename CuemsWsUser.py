@@ -81,6 +81,7 @@ class CuemsWsUser():
                     "file_trash_delete": lambda: self.request_delete_file_trash(value, action),
                     "hw_discovery": lambda: self.hw_discovery(action),
                     "nodeconf": lambda: self.nodeconf(action),
+                    "nodelist_modify": lambda: self.nodelist_modify(value, action, data.get("modify_action")),
                 }
 
                 if action in action_map:
@@ -185,6 +186,29 @@ class CuemsWsUser():
         except Exception as e:
             Logger.error("error: {} {}".format(type(e), e))
             await self.notify_error_to_user(str(e), action=action )
+
+    async def nodelist_modify(self, node_uuid, action, modify_action):
+        Logger.info(f"user {id(self.websocket)} requesting {functionNameAsString()} for node {node_uuid} with action {modify_action}")
+        try:
+            if modify_action not in ["ADD", "REMOVE"]:
+                raise ValueError(f"Invalid modify_action: {modify_action}. Must be 'ADD' or 'REMOVE'")
+            
+            action_uuid = str(new_uuid())
+            engine_command = {
+                "action": functionNameAsString(),
+                "action_uuid": action_uuid,
+                "value": node_uuid,
+                "modify_action": modify_action
+            }
+
+            result = await self.comunicate_with_engine(action, action_uuid, engine_command)
+            Logger.debug(f"nodelist_modify for node {node_uuid}: {result}")
+
+            await self.outgoing.put(json.dumps({"type": "nodelist_modify", "value": "OK"}))
+
+        except Exception as e:
+            Logger.error(f"error: {type(e)} {e}")
+            await self.notify_error_to_user(str(e), action=action)
 
     async def project_deploy(self, project_uuid, action):
         Logger.info(f"user {id(self.websocket)} requesting deploy project {project_uuid}")
