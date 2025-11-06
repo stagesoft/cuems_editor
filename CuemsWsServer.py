@@ -109,6 +109,9 @@ class CuemsWsServer():
             for task in pending_tasks:
                 task.cancel()
 
+        except Exception as e:
+            Logger.debug(f"{e}, {type(e)}")
+
         finally:
             await self.unregister(user_session)
 
