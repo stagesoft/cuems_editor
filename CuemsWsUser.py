@@ -7,7 +7,7 @@ import sys
 
 from cuemsutils.log import logged, Logger
 
-from CuemsErrors import *
+from CuemsErrors import EngineError, NonExistentItemError
 
 TIMEOUT = 25 #TODO: make it configurable, or get from settings
 
@@ -112,6 +112,8 @@ class CuemsWsUser():
                         if action_uuid in response['action_uuid']:
                             if 'type'  not in response:
                                 raise EngineError(f'Engine reports error {response}')
+                            if response['type'] == 'error':
+                                raise EngineError(f'Engine reports error {response.get("value", "Unknown error")}')
                             if response['type'] != action or response['value'] != 'OK':
                                 raise EngineError(f'Engine reports error {response["value"]}')
                             Logger.debug(f'Engine response for {action} is OK')

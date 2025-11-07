@@ -2,7 +2,7 @@
 
 from cuemsutils.log import Logger, logged
 from cuemsutils.tools.ConfigManager import ConfigManager
-from cuemsutils.xml.Settings import ProjectMappings
+from cuemsutils.xml.Settings import ProjectMappings, NetworkMap
 from CuemsWsServer import CuemsWsServer
 
 from multiprocessing import Queue
@@ -34,8 +34,7 @@ cf_manager = ConfigManager(load_all=False)
 settings_file = cf_manager.conf_path('default_mappings.xml')
 project_mappings = ProjectMappings(settings_file)
 print(json.dumps(project_mappings.get_dict()))
-mappings_dict =project_mappings.get_dict()
-#mappings_dict = {'number_of_nodes': 1, 'default_audio_input': '0367f391-ebf4-48b2-9f26-000000000001_system:capture_1', 'default_audio_output': '0367f391-ebf4-48b2-9f26-000000000001_system:playback_1', 'default_video_input': None, 'default_video_output': '0367f391-ebf4-48b2-9f26-000000000001_0', 'default_dmx_input': None, 'default_dmx_output': None, 'nodes': [{'uuid': '0367f391-ebf4-48b2-9f26-000000000001', 'mac': '2cf05d21cca3', 'audio': {'outputs': [{'name': 'system:playback_1', 'mappings': [{'mapped_to': 'system:playback_1'}]}, {'name': 'system:playback_2', 'mappings': [{'mapped_to': 'system:playback_2'}]}], 'inputs': [{'name': 'system:capture_1', 'mappings': [{'mapped_to': 'system:capture_1'}]}, {'name': 'system:capture_2', 'mappings': [{'mapped_to': 'system:capture_2'}]}]}, 'video': {'outputs': [{'name': '0', 'mappings': [{'mapped_to': '0'}]}]}, 'dmx': None}]}
+mappings_dict = project_mappings.get_dict()
 
 
 

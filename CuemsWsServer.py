@@ -18,6 +18,8 @@ from CuemsUpload import CuemsUpload
 from CuemsErrors import *
 
 from cuemsutils.tools.CommunicatorServices import Communicator
+from cuemsutils.tools.ConfigManager import ConfigManager
+from cuemsutils.xml.Settings import NetworkMap
 from cuemsutils.create_script import create_script, new_uuid
 
 
@@ -45,6 +47,8 @@ class CuemsWsServer():
         if (not os.path.exists(self.tmp_path)) or ( not os.access(self.tmp_path,  os.X_OK & os.R_OK & os.W_OK)):
             Logger.error("error: upload folder is not usable")
             raise FileNotFoundError('Can not access upload folder')
+        
+        self._load_network_map_nodes()
 
 
     def start(self, port):
@@ -205,6 +209,21 @@ class CuemsWsServer():
 
     # warning, these non async functions should be not blocking or user @sync_to_async to get their own thread
   
+
+    def _load_network_map_nodes(self):
+        nodes = []
+        new_nodes = []
+        try:
+            cf_manager = ConfigManager(load_all=False)
+            network_map_file = cf_manager.conf_path('network_map.xml')
+            if os.path.isfile(network_map_file):
+                network_map = NetworkMap(network_map_file)
+                nodes, new_nodes = network_map.get_nodes_by_adoption()
+        except Exception as e:
+            Logger.error(f'Error loading network_map: {e}')
+        
+        self.mappings_dict['nodes'] = nodes
+        self.mappings_dict['new_nodes'] = new_nodes
 
     # send initial json template to the client
     def initial_json_template(self):
