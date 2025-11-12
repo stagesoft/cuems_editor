@@ -98,35 +98,39 @@ class CuemsWsUser():
 
     async def comunicate_with_engine(self, action, action_uuid, engine_command):
         try:
-            try:
-                async with asyncio.timeout(TIMEOUT):
-                    response = await self.server.engine_communicator.send_request(engine_command)
-            except TimeoutError:
-                raise EngineError(f' Timeout Error: Engine did not respond in {TIMEOUT} secs for {action} action with uuid {action_uuid}')
-            except Exception as e:
-                raise EngineError(f'can not connect to engine: {e}, {type(e)})')
-
-            if response:
-                    Logger.debug(f'got response from engine {response}')
-                    if "action_uuid" in response.keys():
-                        if action_uuid in response['action_uuid']:
-                            if 'type'  not in response:
-                                raise EngineError(f'Engine reports error {response}')
-                            if response['type'] == 'error':
-                                raise EngineError(f'Engine reports error {response.get("value", "Unknown error")}')
-                            if response['type'] != action or response['value'] != 'OK':
-                                raise EngineError(f'Engine reports error {response["value"]}')
-                            Logger.debug(f'Engine response for {action} is OK')
-                            return response['value']
-                    else:
-                        raise EngineError(f'Engine reports error {response}')
-
-            else:
-                raise EngineError(f'Engine did not respond with valid response')
-            
-
+            async with asyncio.timeout(TIMEOUT):
+                response = await self.server.engine_communicator.send_request(engine_command)
+        except TimeoutError:
+            raise EngineError(f'Timeout: Engine did not respond in {TIMEOUT}s for {action} (uuid: {action_uuid})')
         except Exception as e:
-            raise e
+            raise EngineError(f'Cannot connect to engine: {e} ({type(e).__name__})')
+
+        if not response:
+            raise EngineError(f'Engine did not respond with valid response for {action}')
+
+        Logger.debug(f'Got response from engine: {response}')
+
+        if 'action_uuid' not in response:
+            raise EngineError(f'Engine response missing action_uuid: {response}')
+
+        if action_uuid not in response['action_uuid']:
+            raise EngineError(f'Action UUID mismatch. Expected: {action_uuid}, Got: {response.get("action_uuid")}')
+
+        if 'type' not in response:
+            raise EngineError(f'Engine response missing type field: {response}')
+
+        if response['type'] == 'error':
+            error_value = response.get('value', 'Unknown error')
+            raise EngineError(f'Engine reports error: {error_value}')
+
+        if response['type'] != action:
+            raise EngineError(f'Response type mismatch. Expected: {action}, Got: {response["type"]}')
+
+        if response.get('value') != 'OK':
+            raise EngineError(f'Engine reports error: {response.get("value", "Unknown error")}')
+
+        Logger.debug(f'Engine response for {action} is OK')
+        return response['value']
 
     async def notify_user(self, msg=None, uuid=None,  action=None, new_uuid=None):
         if (uuid is None) and (action is None) and (msg is not None):
@@ -207,7 +211,17 @@ class CuemsWsUser():
             Logger.debug(f"nodelist_modify for node {node_uuid}: {result}")
 
             await self.outgoing.put(json.dumps({"type": "nodelist_modify", "value": "OK"}))
+            
+            await asyncio.sleep(0.1)
+            
+            try:
+                await self.server.notify_all_node_list_update()
+            except Exception as e:
+                Logger.warning(f'Failed to reload and broadcast node list update after adoption: {e}')
 
+        except EngineError as e:
+            Logger.error(f"Engine error in nodelist_modify: {e}")
+            await self.notify_error_to_user(str(e), action=action)
         except Exception as e:
             Logger.error(f"error: {type(e)} {e}")
             await self.notify_error_to_user(str(e), action=action)

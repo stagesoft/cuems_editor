@@ -2,6 +2,7 @@ import asyncio
 import concurrent.futures
 import json
 import os
+import time
 import websockets as ws
 from websockets.asyncio.server import serve
 from multiprocessing import Process
@@ -19,7 +20,6 @@ from CuemsErrors import *
 
 from cuemsutils.tools.CommunicatorServices import Communicator
 from cuemsutils.tools.ConfigManager import ConfigManager
-from cuemsutils.xml.Settings import NetworkMap
 from cuemsutils.create_script import create_script, new_uuid
 
 
@@ -48,7 +48,7 @@ class CuemsWsServer():
             Logger.error("error: upload folder is not usable")
             raise FileNotFoundError('Can not access upload folder')
         
-        self._load_network_map_nodes()
+        self.reload_network_map_nodes()
 
 
     def start(self, port):
@@ -210,20 +210,44 @@ class CuemsWsServer():
     # warning, these non async functions should be not blocking or user @sync_to_async to get their own thread
   
 
-    def _load_network_map_nodes(self):
-        nodes = []
-        new_nodes = []
-        try:
-            cf_manager = ConfigManager(load_all=False)
-            network_map_file = cf_manager.conf_path('network_map.xml')
-            if os.path.isfile(network_map_file):
-                network_map = NetworkMap(network_map_file)
-                nodes, new_nodes = network_map.get_nodes_by_adoption()
-        except Exception as e:
-            Logger.error(f'Error loading network_map: {e}')
+    def reload_network_map_nodes(self):
+        max_retries = 3
+        initial_delay = 0.1
+        delay_after_write = 0.05
         
-        self.mappings_dict['nodes'] = nodes
-        self.mappings_dict['new_nodes'] = new_nodes
+        for attempt in range(max_retries):
+            try:
+                cf_manager = ConfigManager(load_all=False)
+                network_map_file = cf_manager.conf_path('network_map.xml')
+                
+                if not os.path.isfile(network_map_file):
+                    if attempt == 0:
+                        Logger.warning(f'network_map.xml not found at {network_map_file}')
+                    return False
+                
+                time.sleep(delay_after_write)
+                
+                cf_manager.load_network_map()
+                nodes, new_nodes = cf_manager.node_network_map.get_nodes_by_adoption()
+                
+                if not isinstance(nodes, list) or not isinstance(new_nodes, list):
+                    raise ValueError(f'Invalid data structure: nodes and new_nodes must be lists')
+                
+                self.mappings_dict['nodes'] = nodes
+                self.mappings_dict['new_nodes'] = new_nodes
+                Logger.debug(f'Network map reloaded successfully: {len(nodes)} adopted nodes, {len(new_nodes)} new nodes')
+                return True
+                
+            except Exception as e:
+                if attempt < max_retries - 1:
+                    delay = initial_delay * (2 ** attempt)
+                    Logger.warning(f'Error loading network_map (attempt {attempt + 1}/{max_retries}): {e}. Retrying in {delay}s...')
+                    time.sleep(delay)
+                else:
+                    Logger.error(f'Error loading network_map after {max_retries} attempts: {e}')
+                    return False
+        
+        return False
 
     # send initial json template to the client
     def initial_json_template(self):
@@ -232,6 +256,22 @@ class CuemsWsServer():
     def initial_setting_message(self):
         return json.dumps({"type": "initial_mappings", "value": self.mappings_dict })
 
+    async def notify_all_node_list_update(self):
+        
+        reload_success = await self.event_loop.run_in_executor(
+            self.executor, 
+            self.reload_network_map_nodes
+        )
+        if reload_success:
+            if self.users:
+                message = self.initial_setting_message()
+                for user in self.users:
+                    await user.outgoing.put(message)
+                Logger.debug(f'Broadcasted updated node list to {len(self.users)} connected client(s)')
+            else:
+                Logger.debug('Node list updated but no clients connected')
+        else:
+            Logger.warning('Failed to reload network map, not broadcasting update')
 
     def users_event(self, type, uuid=None):
         if type == "users":
