@@ -20,6 +20,7 @@ from CuemsErrors import *
 
 from cuemsutils.tools.CommunicatorServices import Communicator
 from cuemsutils.tools.ConfigManager import ConfigManager
+from cuemsutils.xml import NetworkMap
 from cuemsutils.create_script import create_script, new_uuid
 
 
@@ -228,7 +229,8 @@ class CuemsWsServer():
                 time.sleep(delay_after_write)
                 
                 cf_manager.load_network_map()
-                nodes, new_nodes = cf_manager.node_network_map.get_nodes_by_adoption()
+                nodes_list = cf_manager.network_map if isinstance(cf_manager.network_map, list) else []
+                nodes, new_nodes = NetworkMap.get_nodes_by_adoption(nodes_list)
                 
                 if not isinstance(nodes, list) or not isinstance(new_nodes, list):
                     raise ValueError(f'Invalid data structure: nodes and new_nodes must be lists')
