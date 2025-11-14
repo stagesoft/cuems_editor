@@ -210,6 +210,52 @@ class CuemsWsServer():
 
     # warning, these non async functions should be not blocking or user @sync_to_async to get their own thread
   
+    def merge_node_data(self, existing_nodes, new_nodes):
+        """
+        Merge existing node data (with outputs) with new node data (with updated status).
+        Matches nodes by UUID and preserves outputs configuration while updating basic fields.
+        
+        Args:
+            existing_nodes: List of existing nodes with outputs configuration
+            new_nodes: List of new nodes from network_map with updated status
+            
+        Returns:
+            List of merged nodes preserving outputs and updating status
+        """
+        # Create a lookup dict for existing nodes by UUID
+        existing_by_uuid = {}
+        for node_item in existing_nodes:
+            if 'node' in node_item:
+                uuid = node_item['node'].get('uuid')
+                if uuid:
+                    existing_by_uuid[uuid] = node_item
+        
+        # Merge new nodes with existing data
+        merged_nodes = []
+        for new_node_item in new_nodes:
+            if 'node' not in new_node_item:
+                continue
+                
+            new_node = new_node_item['node']
+            uuid = new_node.get('uuid')
+            
+            if uuid and uuid in existing_by_uuid:
+                # Node exists - merge data
+                existing_node = existing_by_uuid[uuid]['node'].copy()
+                
+                # Update basic fields from network_map (online, adopted, ip, name, etc.)
+                basic_fields = ['online', 'adopted', 'ip', 'name', 'node_type', 'mac']
+                for field in basic_fields:
+                    if field in new_node:
+                        existing_node[field] = new_node[field]
+                
+                # Keep outputs (audio, video, dmx) from existing node
+                merged_nodes.append({'node': existing_node})
+            else:
+                # New node not in existing data - add as-is
+                merged_nodes.append(new_node_item)
+        
+        return merged_nodes
 
     def reload_network_map_nodes(self):
         max_retries = 3
@@ -229,15 +275,22 @@ class CuemsWsServer():
                 time.sleep(delay_after_write)
                 
                 cf_manager.load_network_map()
-                nodes_list = cf_manager.network_map if isinstance(cf_manager.network_map, list) else []
-                nodes, new_nodes = NetworkMap.get_nodes_by_adoption(nodes_list)
+                # network_map is now a dict with 'node_list' key
+                network_map_dict = cf_manager.network_map
+                nodes, new_nodes = NetworkMap.get_nodes_by_adoption(network_map_dict)
                 
-                if not isinstance(nodes, list) or not isinstance(new_nodes, list):
-                    raise ValueError(f'Invalid data structure: nodes and new_nodes must be lists')
+                # Merge with existing data to preserve outputs configuration
+                # Combine both lists to handle nodes that change adoption status
+                existing_nodes = self.mappings_dict.get('nodes', [])
+                existing_new_nodes = self.mappings_dict.get('new_nodes', [])
+                all_existing = existing_nodes + existing_new_nodes
                 
-                self.mappings_dict['nodes'] = nodes
-                self.mappings_dict['new_nodes'] = new_nodes
-                Logger.debug(f'Network map reloaded successfully: {len(nodes)} adopted nodes, {len(new_nodes)} new nodes')
+                merged_nodes = self.merge_node_data(all_existing, nodes)
+                merged_new_nodes = self.merge_node_data(all_existing, new_nodes)
+                
+                self.mappings_dict['nodes'] = merged_nodes
+                self.mappings_dict['new_nodes'] = merged_new_nodes
+                Logger.debug(f'Network map reloaded successfully: {len(merged_nodes)} adopted nodes, {len(merged_new_nodes)} new nodes')
                 return True
                 
             except Exception as e:
