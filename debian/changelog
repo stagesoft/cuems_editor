@@ -1,9 +1,11 @@
-cuems-editor (0.1.0-1) bookworm; urgency=medium
+cuems-editor (0.1.0rc1-1) bookworm; urgency=medium
 
   * Initial Debian package release
   * WebSocket server for collaborative editing
   * Database management for projects and media
   * Integration with cuems-utils virtual environment
   * Systemd service for automatic startup
+  * Package restructure: source in src/, tests in tests/
+  * Dual-mode CLI: manual and daemon execution modes
 
- -- CUEMS Team <cuems@example.com>  Thu, 11 Dec 2025 00:00:00 +0000
+ -- Ion Reguera <ion@stagelab.coop>  Thu, 11 Dec 2025 00:00:00 +0000

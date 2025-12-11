@@ -7,20 +7,24 @@ export DH_VERBOSE = 1
 	dh $@ --with python-virtualenv
 
 override_dh_virtualenv:
+	# Use existing venv at /usr/lib/cuems (created by cuems-utils)
+	# Install package into it
 	dh_virtualenv --python python3 \
 		--install-suffix cuems \
-		--use-system-packages \
-		--skip-install
-
-override_dh_auto_install:
-	# Install package using pip into existing venv
-	/usr/lib/cuems/bin/pip3 install --no-deps .
+		--use-system-packages
 
 override_dh_auto_clean:
 	rm -rf build *.egg-info src/*.egg-info
 	find . -name '*.pyc' -delete
-	find . -name '__pycache__' -delete
+	find . -name '__pycache__' -type d -exec rm -rf {} + 2>/dev/null || true
 	dh_auto_clean
+
+override_dh_fixperms:
+	# Remove __pycache__ directories from installed package
+	find debian/cuems-editor -type d -name '__pycache__' -exec rm -rf {} + 2>/dev/null || true
+	find debian/cuems-editor -name '*.pyc' -delete
+	find debian/cuems-editor -name '*.pyo' -delete
+	dh_fixperms
 
 override_dh_auto_test:
 	# Skip tests during package build
