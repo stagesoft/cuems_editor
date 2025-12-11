@@ -1,0 +1,31 @@
+Source: cuems-editor
+Section: python
+Priority: optional
+Maintainer: CUEMS Team <cuems@example.com>
+Build-Depends: debhelper-compat (= 13),
+               dh-virtualenv (>= 1.2),
+               python3-all,
+               python3-setuptools,
+               python3-pip,
+               python3-dev
+Standards-Version: 4.6.0
+Homepage: https://github.com/cuems/cuems-editor
+
+Package: cuems-editor
+Architecture: all
+Depends: ${misc:Depends},
+         ${python3:Depends},
+         cuems-utils (>= 0.1.0),
+         cuems-common (>= 1.0.0),
+         python3 (>= 3.11)
+Description: CUEMS Editor - Collaborative Universal Edit Management System
+ CUEMS Editor provides a WebSocket-based server for collaborative
+ editing and project management. It includes modules for database
+ management, media handling, and project organization.
+ .
+ This package installs into the /usr/lib/cuems/ virtual environment
+ provided by cuems-utils. Console scripts are installed to
+ /usr/lib/cuems/bin/cuems-editor and /usr/lib/cuems/bin/cuems-ws-server.
+ .
+ The systemd service file is provided by cuems-common and runs the
+ cuems-ws-server console script.

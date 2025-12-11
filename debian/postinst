@@ -1,0 +1,47 @@
+#!/bin/bash
+set -e
+
+CUEMS_VENV="/usr/lib/cuems"
+
+case "$1" in
+    configure)
+        # Verify virtual environment exists
+        if [ ! -f "$CUEMS_VENV/bin/python3" ]; then
+            echo "ERROR: Virtual environment not found at $CUEMS_VENV" >&2
+            echo "Please ensure cuems-utils package is properly installed." >&2
+            exit 1
+        fi
+        
+        # Verify console scripts were installed
+        if [ ! -f "$CUEMS_VENV/bin/cuems-ws-server" ]; then
+            echo "WARNING: Console script cuems-ws-server not found" >&2
+        fi
+        
+        # Reload systemd (service file from cuems-common)
+        if command -v deb-systemd-helper >/dev/null 2>&1; then
+            deb-systemd-helper update-state >/dev/null 2>&1 || true
+        elif command -v systemctl >/dev/null 2>&1; then
+            systemctl daemon-reload || true
+        fi
+        
+        echo "cuems-editor installed successfully."
+        echo "Package: cuemseditor installed to $CUEMS_VENV/lib/python*/site-packages/"
+        echo "Console scripts: $CUEMS_VENV/bin/cuems-editor, $CUEMS_VENV/bin/cuems-ws-server"
+        echo "Service file provided by cuems-common package."
+        echo ""
+        echo "To start: systemctl start cuems-editor"
+        echo "To enable: systemctl enable cuems-editor"
+        ;;
+        
+    abort-upgrade|abort-remove|abort-deconfigure)
+        ;;
+        
+    *)
+        echo "postinst called with unknown argument \`$1'" >&2
+        exit 1
+        ;;
+esac
+
+#DEBHELPER#
+
+exit 0

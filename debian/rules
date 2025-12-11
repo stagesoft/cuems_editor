@@ -1,0 +1,26 @@
+#!/usr/bin/make -f
+
+export DH_VIRTUALENV_INSTALL_ROOT=/usr/lib
+export DH_VERBOSE = 1
+
+%:
+	dh $@ --with python-virtualenv
+
+override_dh_virtualenv:
+	dh_virtualenv --python python3 \
+		--install-suffix cuems \
+		--use-system-packages \
+		--skip-install
+
+override_dh_auto_install:
+	# Install package using pip into existing venv
+	/usr/lib/cuems/bin/pip3 install --no-deps .
+
+override_dh_auto_clean:
+	rm -rf build *.egg-info src/*.egg-info
+	find . -name '*.pyc' -delete
+	find . -name '__pycache__' -delete
+	dh_auto_clean
+
+override_dh_auto_test:
+	# Skip tests during package build
