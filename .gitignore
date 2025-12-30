@@ -19,4 +19,9 @@ nohup.out
 
 dev/local/
 site/
-debian/
+
+# Debian build artifacts (but not debian/ source files)
+debian/cuems-editor/
+debian/*.deb
+debian/*.log
+debian/.debhelper/
