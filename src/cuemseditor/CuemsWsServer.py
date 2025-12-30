@@ -13,10 +13,10 @@ import re
 
 from cuemsutils.log import logged, Logger
 
-from CuemsProjectManager import CuemsDBManager
-from CuemsWsUser import CuemsWsUser
-from CuemsUpload import CuemsUpload
-from CuemsErrors import *
+from cuemseditor.CuemsProjectManager import CuemsDBManager
+from cuemseditor.CuemsWsUser import CuemsWsUser
+from cuemseditor.CuemsUpload import CuemsUpload
+from cuemseditor.CuemsErrors import *
 
 from cuemsutils.tools.CommunicatorServices import Communicator
 from cuemsutils.tools.ConfigManager import ConfigManager
@@ -52,7 +52,12 @@ class CuemsWsServer():
         self.reload_network_map_nodes()
 
 
-    def start(self, port):
+    def start(self, port=None):
+        # Use provided port, or fall back to self.port if set (for daemon mode)
+        if port is None:
+            if not hasattr(self, 'port') or self.port is None:
+                raise ValueError("port argument is required or must be set on server instance")
+            port = self.port
         self.port = port
         self.host = 'localhost'
         newfeature = asyncio.get_event_loop().run_until_complete(self.run_async_server())

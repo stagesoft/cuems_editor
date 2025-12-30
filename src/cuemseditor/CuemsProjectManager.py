@@ -8,10 +8,10 @@ import traceback
 
 from cuemsutils.log import logged, Logger
 
-from CuemsDBMedia import CuemsDBMedia
-from CuemsDBProject import CuemsDBProject
-from CuemsDBModel import Project, Media, ProjectMedia, database
-from CuemsErrors import *
+from cuemseditor.CuemsDBMedia import CuemsDBMedia
+from cuemseditor.CuemsDBProject import CuemsDBProject
+from cuemseditor.CuemsDBModel import Project, Media, ProjectMedia, database
+from cuemseditor.CuemsErrors import *
 
 
 

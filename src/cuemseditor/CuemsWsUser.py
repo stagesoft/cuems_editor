@@ -7,7 +7,7 @@ import sys
 
 from cuemsutils.log import logged, Logger
 
-from CuemsErrors import EngineError, NonExistentItemError
+from cuemseditor.CuemsErrors import EngineError, NonExistentItemError
 
 TIMEOUT = 25 #TODO: make it configurable, or get from settings
 
