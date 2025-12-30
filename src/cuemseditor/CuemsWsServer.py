@@ -286,8 +286,8 @@ class CuemsWsServer():
                 
                 # Merge with existing data to preserve outputs configuration
                 # Combine both lists to handle nodes that change adoption status
-                existing_nodes = self.mappings_dict.get('nodes', [])
-                existing_new_nodes = self.mappings_dict.get('new_nodes', [])
+                existing_nodes = self.mappings_dict.get('nodes') or []
+                existing_new_nodes = self.mappings_dict.get('new_nodes') or []
                 all_existing = existing_nodes + existing_new_nodes
                 
                 merged_nodes = self.merge_node_data(all_existing, nodes)
