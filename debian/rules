@@ -32,25 +32,26 @@ override_dh_fixperms:
 	rm -f debian/cuems-editor/usr/lib/cuems/pyvenv.cfg
 	rm -rf debian/cuems-editor/usr/lib/cuems/lib/python3.11/site-packages/_virtualenv.*
 	rm -rf debian/cuems-editor/usr/lib/cuems/lib/python3.11/site-packages/_distutils_hack
-	# Remove shared dependencies (provided by cuems-utils)
-	rm -rf debian/cuems-editor/usr/lib/cuems/lib/python3.11/site-packages/aiofiles-24.1.0.dist-info
-	rm -rf debian/cuems-editor/usr/lib/cuems/lib/python3.11/site-packages/cffi-2.0.0.dist-info
-	rm -rf debian/cuems-editor/usr/lib/cuems/lib/python3.11/site-packages/Deprecated-1.2.18.dist-info
-	rm -rf debian/cuems-editor/usr/lib/cuems/lib/python3.11/site-packages/elementpath-4.8.0.dist-info
-	rm -rf debian/cuems-editor/usr/lib/cuems/lib/python3.11/site-packages/json_fix-1.0.0.dist-info
-	rm -rf debian/cuems-editor/usr/lib/cuems/lib/python3.11/site-packages/lxml-5.3.0.dist-info
-	rm -rf debian/cuems-editor/usr/lib/cuems/lib/python3.11/site-packages/peewee-3.17.8.dist-info
-	rm -rf debian/cuems-editor/usr/lib/cuems/lib/python3.11/site-packages/pip-25.1.1.dist-info
-	rm -rf debian/cuems-editor/usr/lib/cuems/lib/python3.11/site-packages/pycparser-2.23.dist-info
-	rm -rf debian/cuems-editor/usr/lib/cuems/lib/python3.11/site-packages/pynng-0.8.1.dist-info
-	rm -rf debian/cuems-editor/usr/lib/cuems/lib/python3.11/site-packages/setuptools-80.3.1.dist-info
-	rm -rf debian/cuems-editor/usr/lib/cuems/lib/python3.11/site-packages/sniffio-1.3.1.dist-info
-	rm -rf debian/cuems-editor/usr/lib/cuems/lib/python3.11/site-packages/timecode-1.4.1.dist-info
-	rm -rf debian/cuems-editor/usr/lib/cuems/lib/python3.11/site-packages/websockets-14.1.dist-info
-	rm -rf debian/cuems-editor/usr/lib/cuems/lib/python3.11/site-packages/wheel-0.45.1.dist-info
-	rm -rf debian/cuems-editor/usr/lib/cuems/lib/python3.11/site-packages/wrapt-1.17.3.dist-info
-	rm -rf debian/cuems-editor/usr/lib/cuems/lib/python3.11/site-packages/xmlschema-3.4.3.dist-info
-	rm -rf debian/cuems-editor/usr/lib/cuems/lib/python3.11/site-packages/cuemsutils-0.1.0rc4.dist-info
+	# Remove shared dependencies dist-info (any version, provided by cuems-utils)
+	# Using wildcards to handle different versions across build machines
+	find debian/cuems-editor/usr/lib/cuems/lib/python3.11/site-packages -name "aiofiles-*.dist-info" -type d -exec rm -rf {} + 2>/dev/null || true
+	find debian/cuems-editor/usr/lib/cuems/lib/python3.11/site-packages -name "cffi-*.dist-info" -type d -exec rm -rf {} + 2>/dev/null || true
+	find debian/cuems-editor/usr/lib/cuems/lib/python3.11/site-packages -name "Deprecated-*.dist-info" -type d -exec rm -rf {} + 2>/dev/null || true
+	find debian/cuems-editor/usr/lib/cuems/lib/python3.11/site-packages -name "elementpath-*.dist-info" -type d -exec rm -rf {} + 2>/dev/null || true
+	find debian/cuems-editor/usr/lib/cuems/lib/python3.11/site-packages -name "json_fix-*.dist-info" -type d -exec rm -rf {} + 2>/dev/null || true
+	find debian/cuems-editor/usr/lib/cuems/lib/python3.11/site-packages -name "lxml-*.dist-info" -type d -exec rm -rf {} + 2>/dev/null || true
+	find debian/cuems-editor/usr/lib/cuems/lib/python3.11/site-packages -name "peewee-*.dist-info" -type d -exec rm -rf {} + 2>/dev/null || true
+	find debian/cuems-editor/usr/lib/cuems/lib/python3.11/site-packages -name "pip-*.dist-info" -type d -exec rm -rf {} + 2>/dev/null || true
+	find debian/cuems-editor/usr/lib/cuems/lib/python3.11/site-packages -name "pycparser-*.dist-info" -type d -exec rm -rf {} + 2>/dev/null || true
+	find debian/cuems-editor/usr/lib/cuems/lib/python3.11/site-packages -name "pynng-*.dist-info" -type d -exec rm -rf {} + 2>/dev/null || true
+	find debian/cuems-editor/usr/lib/cuems/lib/python3.11/site-packages -name "setuptools-*.dist-info" -type d -exec rm -rf {} + 2>/dev/null || true
+	find debian/cuems-editor/usr/lib/cuems/lib/python3.11/site-packages -name "sniffio-*.dist-info" -type d -exec rm -rf {} + 2>/dev/null || true
+	find debian/cuems-editor/usr/lib/cuems/lib/python3.11/site-packages -name "timecode-*.dist-info" -type d -exec rm -rf {} + 2>/dev/null || true
+	find debian/cuems-editor/usr/lib/cuems/lib/python3.11/site-packages -name "websockets-*.dist-info" -type d -exec rm -rf {} + 2>/dev/null || true
+	find debian/cuems-editor/usr/lib/cuems/lib/python3.11/site-packages -name "wheel-*.dist-info" -type d -exec rm -rf {} + 2>/dev/null || true
+	find debian/cuems-editor/usr/lib/cuems/lib/python3.11/site-packages -name "wrapt-*.dist-info" -type d -exec rm -rf {} + 2>/dev/null || true
+	find debian/cuems-editor/usr/lib/cuems/lib/python3.11/site-packages -name "xmlschema-*.dist-info" -type d -exec rm -rf {} + 2>/dev/null || true
+	find debian/cuems-editor/usr/lib/cuems/lib/python3.11/site-packages -name "cuemsutils-*.dist-info" -type d -exec rm -rf {} + 2>/dev/null || true
 	# Remove shared package directories (provided by cuems-utils)
 	rm -rf debian/cuems-editor/usr/lib/cuems/lib/python3.11/site-packages/aiofiles
 	rm -rf debian/cuems-editor/usr/lib/cuems/lib/python3.11/site-packages/cffi
