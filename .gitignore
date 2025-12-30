@@ -33,3 +33,6 @@ debian/.debhelper/
 debian/files
 debian/debhelper-build-stamp
 debian/tmp/
+# Debhelper generated scripts
+debian/*.debhelper
+debian/cuems-editor.*.debhelper
