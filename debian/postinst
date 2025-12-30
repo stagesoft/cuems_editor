@@ -28,9 +28,21 @@ case "$1" in
         echo "Package: cuemseditor installed to $CUEMS_VENV/lib/python*/site-packages/"
         echo "Console scripts: $CUEMS_VENV/bin/cuems-editor, $CUEMS_VENV/bin/cuems-ws-server"
         echo "Service file provided by cuems-common package."
-        echo ""
-        echo "To start: systemctl start cuems-editor"
-        echo "To enable: systemctl enable cuems-editor"
+        
+        # Enable and start the service
+        if command -v systemctl >/dev/null 2>&1; then
+            if systemctl is-enabled cuems-editor >/dev/null 2>&1; then
+                echo "Service cuems-editor is already enabled."
+            else
+                systemctl enable cuems-editor || echo "WARNING: Failed to enable cuems-editor service" >&2
+            fi
+            
+            if systemctl is-active --quiet cuems-editor 2>/dev/null; then
+                echo "Service cuems-editor is already running."
+            else
+                systemctl start cuems-editor || echo "WARNING: Failed to start cuems-editor service" >&2
+            fi
+        fi
         ;;
         
     abort-upgrade|abort-remove|abort-deconfigure)
