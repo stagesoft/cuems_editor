@@ -15,8 +15,8 @@ from cuemsutils.tools.CTimecode  import CTimecode
 from cuemsutils.log import logged, Logger
 from cuemsutils.helpers import new_datetime
 
-from CuemsDBModel import Project, Media, ProjectMedia
-from CuemsErrors import *
+from cuemseditor.CuemsDBModel import Project, Media, ProjectMedia
+from cuemseditor.CuemsErrors import *
 
 
 

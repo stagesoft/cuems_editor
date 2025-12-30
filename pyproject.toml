@@ -44,7 +44,6 @@ Issues = "https://github.com/cuems/cuems-editor/issues"
 
 [project.scripts]
 cuems-editor = "cuemseditor.cli:main"
-cuems-ws-server = "cuemseditor.cli:main"
 cuems-editor-manual = "cuemseditor.run_manual:main"
 
 [tool.hatch.version]

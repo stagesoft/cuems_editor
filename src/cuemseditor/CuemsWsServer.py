@@ -13,10 +13,10 @@ import re
 
 from cuemsutils.log import logged, Logger
 
-from CuemsProjectManager import CuemsDBManager
-from CuemsWsUser import CuemsWsUser
-from CuemsUpload import CuemsUpload
-from CuemsErrors import *
+from cuemseditor.CuemsProjectManager import CuemsDBManager
+from cuemseditor.CuemsWsUser import CuemsWsUser
+from cuemseditor.CuemsUpload import CuemsUpload
+from cuemseditor.CuemsErrors import *
 
 from cuemsutils.tools.CommunicatorServices import Communicator
 from cuemsutils.tools.ConfigManager import ConfigManager
@@ -52,7 +52,12 @@ class CuemsWsServer():
         self.reload_network_map_nodes()
 
 
-    def start(self, port):
+    def start(self, port=None):
+        # Use provided port, or fall back to self.port if set (for daemon mode)
+        if port is None:
+            if not hasattr(self, 'port') or self.port is None:
+                raise ValueError("port argument is required or must be set on server instance")
+            port = self.port
         self.port = port
         self.host = 'localhost'
         newfeature = asyncio.get_event_loop().run_until_complete(self.run_async_server())
@@ -281,8 +286,8 @@ class CuemsWsServer():
                 
                 # Merge with existing data to preserve outputs configuration
                 # Combine both lists to handle nodes that change adoption status
-                existing_nodes = self.mappings_dict.get('nodes', [])
-                existing_new_nodes = self.mappings_dict.get('new_nodes', [])
+                existing_nodes = self.mappings_dict.get('nodes') or []
+                existing_new_nodes = self.mappings_dict.get('new_nodes') or []
                 all_existing = existing_nodes + existing_new_nodes
                 
                 merged_nodes = self.merge_node_data(all_existing, nodes)

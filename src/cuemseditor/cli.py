@@ -93,7 +93,7 @@ def run_manual(port=9092):
         raise
 
 
-def run_daemon_mode():
+def run_daemon_mode(port=9092):
     """Run server in daemon mode (for systemd)"""
     Logger.info("Starting CUEMS Editor in DAEMON mode")
     
@@ -107,7 +107,10 @@ def run_daemon_mode():
     ensure_directories(settings_dict)
     
     # Create server and run as daemon
+    Logger.info(f"Starting WebSocket server on port {port}")
     server = CuemsWsServer(settings_dict, mappings_dict)
+    # Set port on server so start() can use it when called by run_daemon()
+    server.port = port
     run_daemon(server, 'cuems_editor')
 
 
@@ -137,14 +140,14 @@ Examples:
         '--port',
         type=int,
         default=9092,
-        help='WebSocket server port (manual mode only). Default: 9092'
+        help='WebSocket server port. Default: 9092'
     )
     
     args = parser.parse_args()
     
     if args.daemon:
         # Daemon mode - for systemd
-        run_daemon_mode()
+        run_daemon_mode(port=args.port)
     else:
         # Manual mode - for development/testing
         run_manual(port=args.port)

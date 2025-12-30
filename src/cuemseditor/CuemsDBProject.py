@@ -11,8 +11,8 @@ from cuemsutils.helpers import new_datetime, new_uuid
 from cuemsutils.log import logged, Logger
 
 
-from CuemsErrors import *
-from CuemsDBModel import Project, Media, ProjectMedia
+from cuemseditor.CuemsErrors import *
+from cuemseditor.CuemsDBModel import Project, Media, ProjectMedia
 
 
 
