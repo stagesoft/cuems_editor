@@ -23,5 +23,13 @@ site/
 # Debian build artifacts (but not debian/ source files)
 debian/cuems-editor/
 debian/*.deb
+debian/*.deb.*
+debian/*.build
+debian/*.buildinfo
+debian/*.changes
 debian/*.log
+debian/*.substvars
 debian/.debhelper/
+debian/files
+debian/debhelper-build-stamp
+debian/tmp/
