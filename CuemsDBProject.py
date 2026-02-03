@@ -81,6 +81,10 @@ class CuemsDBProject(StringSanitizer):
         except KeyError:
             pass
 
+        # TEMPORARY FIX: Frontend doesn't send correct media duration, fix it from database
+        # TODO: Remove this once frontend properly fetches duration via file_load_meta
+        self._fix_media_durations(data)
+
         with self.db.atomic() as transaction:
             try:
                 project.name=StringSanitizer.sanitize_name(data['CuemsScript']['name'])
@@ -97,7 +101,48 @@ class CuemsDBProject(StringSanitizer):
                 transaction.rollback()
                 raise e
             
+    # TEMPORARY FIX: Frontend doesn't send correct media duration
+    # TODO: Remove this once frontend properly fetches duration via file_load_meta
+    def _fix_media_durations(self, data):
+        """Fix media durations in project data from database.
         
+        The frontend sends duration as '00:00:00.000' even though the database
+        has the correct duration. This method looks up each media file's duration
+        from the database and updates it in the project data before saving.
+        """
+        try:
+            cuelist = data.get('CuemsScript', {}).get('CueList', {})
+            contents = cuelist.get('contents', [])
+            self._fix_durations_recursive(contents)
+        except Exception as e:
+            logger.warning(f"Could not fix media durations: {e}")
+
+    def _fix_durations_recursive(self, contents):
+        """Recursively fix media durations in cue contents."""
+        if not contents:
+            return
+            
+        for item in contents:
+            for cue_type in ['AudioCue', 'VideoCue', 'CueList']:
+                if cue_type in item:
+                    cue_data = item[cue_type]
+                    if cue_type == 'CueList':
+                        nested_contents = cue_data.get('contents', [])
+                        self._fix_durations_recursive(nested_contents)
+                    else:
+                        media = cue_data.get('Media', {})
+                        if media:
+                            file_name = media.get('file_name')
+                            if file_name:
+                                try:
+                                    db_media = Media.get(Media.unix_name == file_name)
+                                    if db_media.duration:
+                                        old_duration = media.get('duration', '00:00:00.000')
+                                        media['duration'] = str(db_media.duration)
+                                        if old_duration != media['duration']:
+                                            logger.debug(f"Fixed duration for {file_name}: {old_duration} -> {media['duration']}")
+                                except DoesNotExist:
+                                    logger.warning(f"Media not found in database: {file_name}")
 
     def new(self, data, unix_name):
 
