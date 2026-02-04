@@ -81,6 +81,10 @@ class CuemsDBProject(StringSanitizer):
         except KeyError:
             pass
 
+        # TEMPORARY FIX: Frontend doesn't send correct media duration, fix it from database
+        # TODO: Remove this once frontend properly fetches duration via file_load_meta
+        self._fix_media_durations(data)
+
         with self.db.atomic() as transaction:
             try:
                 project.name=StringSanitizer.sanitize_name(data['CuemsScript']['name'])
@@ -96,8 +100,53 @@ class CuemsDBProject(StringSanitizer):
                 Logger.error("error: {} {} trying to update  project, rolling back database update".format(type(e), e))
                 transaction.rollback()
                 raise e
-            
+
+    # TEMPORARY FIX: Frontend doesn't send correct media duration
+    # TODO: Remove this once frontend properly fetches duration via file_load_meta
+    def _fix_media_durations(self, data):
+        """Fix media durations in project data from database.
         
+        The frontend sends duration as '00:00:00.000' even though the database
+        has the correct duration. This method looks up each media file's duration
+        from the database and updates it in the project data before saving.
+        """
+        try:
+            cuelist = data.get('CuemsScript', {}).get('CueList', {})
+            contents = cuelist.get('contents', [])
+            self._fix_durations_recursive(contents)
+        except Exception as e:
+            Logger.warning(f"Could not fix media durations: {e}")
+
+    def _fix_durations_recursive(self, contents):
+        """Recursively fix media durations in cue contents."""
+        if not contents:
+            return
+            
+        for item in contents:
+            # Handle nested CueLists
+            if 'CueList' in item:
+                nested_contents = item['CueList'].get('contents', [])
+                self._fix_durations_recursive(nested_contents)
+            
+            # Check for AudioCue or VideoCue wrappers
+            cue_data = None
+            if 'AudioCue' in item:
+                cue_data = item['AudioCue']
+            elif 'VideoCue' in item:
+                cue_data = item['VideoCue']
+            else:
+                cue_data = item  # flat structure
+            
+            media = cue_data.get('Media') if isinstance(cue_data, dict) else None
+            if media and isinstance(media, dict):
+                file_name = media.get('file_name')
+                if file_name:
+                    try:
+                        db_media = Media.get(Media.unix_name == file_name)
+                        if db_media.duration:
+                            media['duration'] = str(db_media.duration)
+                    except DoesNotExist:
+                        pass  # Media not in database, keep original duration
 
     def new(self, data, unix_name):
 
