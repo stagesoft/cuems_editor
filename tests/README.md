@@ -19,7 +19,7 @@ This directory contains test files, development scripts, and web interface for t
 ### Legacy Files (Reference Only)
 - **`legacy/`** - Directory containing old Python source files
   - All original Python modules (CuemsWsServer.py, CuemsDBModel.py, etc.)
-  - Old scripts (ws-server.py, run-ws-server.py)
+  - Old scripts (ws-server.py)
   - **Note**: These are duplicates kept for reference only
   - **Active source code** is in `../src/cuemseditor/`
 
@@ -94,12 +94,12 @@ For production deployment with Apache:
 The production code is in `../src/cuemseditor/`:
 ```bash
 cd ../src/cuemseditor
-python3 cli.py            # Manual mode
-python3 cli.py --daemon   # Daemon mode
+python3 cli.py            # Run server
+python3 cli.py --port 9092  # Specify port
 ```
 
 Or after installation:
 ```bash
-/usr/lib/cuems/bin/cuems-ws-server
+/usr/lib/cuems/bin/cuems-editor
 systemctl start cuems-editor
 ```

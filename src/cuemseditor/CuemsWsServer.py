@@ -53,7 +53,7 @@ class CuemsWsServer():
 
 
     def start(self, port=None):
-        # Use provided port, or fall back to self.port if set (for daemon mode)
+        # Use provided port, or fall back to self.port if set
         if port is None:
             if not hasattr(self, 'port') or self.port is None:
                 raise ValueError("port argument is required or must be set on server instance")
