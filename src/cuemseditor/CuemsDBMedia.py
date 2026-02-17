@@ -374,17 +374,18 @@ class CuemsDBMedia(StringSanitizer):
             raise NonExistentItemError("item with uuid: {} does not exist".format(uuid))
 
     def get_type(self, filename):
-        movie_list = ('.mov', '.avi', '.mkv', '.mpg', '.mp4')
-        audio_list = ('.aif', '.aiff', '.wav', '.mp3')
-        image_list = ('.png', '.jpg', '.tga')
+        movie_list = ('.mov', '.avi', '.mkv', '.mpg', '.mp4', '.webm', '.m4v', '.flv', '.wmv', '.ogv', '.3gp')
+        audio_list = ('.aif', '.aiff', '.wav', '.mp3', '.m4a', '.ogg', '.oga', '.flac', '.aac', '.wma', '.opus', '.weba')
+        image_list = ('.png', '.jpg', '.jpeg', '.tga', '.webp', '.gif', '.bmp', '.heic', '.heif', '.tiff', '.tif', '.ico')
         name_root, file_extension = os.path.splitext(filename)
+        file_extension_lower = file_extension.lower() if file_extension else ''
         _type = None
 
-        if file_extension in movie_list:
+        if file_extension_lower in movie_list:
             _type = MediaType.MOVIE
-        elif file_extension in audio_list:
+        elif file_extension_lower in audio_list:
             _type = MediaType.AUDIO
-        elif file_extension in image_list:
+        elif file_extension_lower in image_list:
             _type = MediaType.IMAGE
 
         return _type
