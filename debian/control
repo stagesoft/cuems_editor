@@ -25,7 +25,6 @@ Description: CUEMS Editor - Collaborative Universal Edit Management System
  .
  This package installs into the /usr/lib/cuems/ virtual environment
  provided by cuems-utils. Console scripts are installed to
- /usr/lib/cuems/bin/cuems-editor and /usr/lib/cuems/bin/cuems-ws-server.
+ /usr/lib/cuems/bin/cuems-editor and /usr/lib/cuems/bin/cuems-editor-manual.
  .
- The systemd service file is provided by cuems-common and runs the
- cuems-ws-server console script.
+ The systemd service file is provided by cuems-common.

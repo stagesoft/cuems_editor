@@ -11,43 +11,41 @@ case "$1" in
             echo "Please ensure cuems-utils package is properly installed." >&2
             exit 1
         fi
-        
-        # Verify console scripts were installed
-        if [ ! -f "$CUEMS_VENV/bin/cuems-ws-server" ]; then
-            echo "WARNING: Console script cuems-ws-server not found" >&2
+
+        # Verify console script was installed
+        if [ ! -f "$CUEMS_VENV/bin/cuems-editor" ]; then
+            echo "WARNING: Console script cuems-editor not found at $CUEMS_VENV/bin/" >&2
         fi
-        
+
         # Reload systemd (service file from cuems-common)
-        if command -v deb-systemd-helper >/dev/null 2>&1; then
-            deb-systemd-helper update-state >/dev/null 2>&1 || true
-        elif command -v systemctl >/dev/null 2>&1; then
+        if [ -d /run/systemd/system ]; then
             systemctl daemon-reload || true
         fi
-        
+
         echo "cuems-editor installed successfully."
         echo "Package: cuemseditor installed to $CUEMS_VENV/lib/python*/site-packages/"
-        echo "Console scripts: $CUEMS_VENV/bin/cuems-editor, $CUEMS_VENV/bin/cuems-ws-server"
+        echo "Console scripts: $CUEMS_VENV/bin/cuems-editor, $CUEMS_VENV/bin/cuems-editor-manual"
         echo "Service file provided by cuems-common package."
-        
-        # Enable and start the service
-        if command -v systemctl >/dev/null 2>&1; then
-            if systemctl is-enabled cuems-editor >/dev/null 2>&1; then
-                echo "Service cuems-editor is already enabled."
-            else
+
+        # Enable and (re)start the service
+        if [ -d /run/systemd/system ]; then
+            if ! systemctl is-enabled cuems-editor >/dev/null 2>&1; then
                 systemctl enable cuems-editor || echo "WARNING: Failed to enable cuems-editor service" >&2
             fi
-            
-            if systemctl is-active --quiet cuems-editor 2>/dev/null; then
-                echo "Service cuems-editor is already running."
+
+            # $2 is the previously-configured version (set on upgrade, empty on fresh install)
+            if [ -n "$2" ]; then
+                echo "Upgrade from $2 detected, restarting cuems-editor service..."
+                systemctl restart cuems-editor || echo "WARNING: Failed to restart cuems-editor service" >&2
             else
                 systemctl start cuems-editor || echo "WARNING: Failed to start cuems-editor service" >&2
             fi
         fi
         ;;
-        
+
     abort-upgrade|abort-remove|abort-deconfigure)
         ;;
-        
+
     *)
         echo "postinst called with unknown argument \`$1'" >&2
         exit 1
