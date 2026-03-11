@@ -56,7 +56,7 @@ class CuemsDBProject(StringSanitizer):
         project_list = list()
         projects = Project.select().where(Project.in_trash == False).order_by(Project.created.desc())
         for project in projects:
-            project_dict = {str(project.uuid): {'name': project.name, 'unix_name': project.unix_name, 'created': project.created, 'modified': project.modified} }
+            project_dict = {str(project.uuid): {'name': project.name, 'unix_name': project.unix_name, 'description': project.description, 'created': project.created, 'modified': project.modified} }
             project_list.append(project_dict)
 
         return project_list
@@ -65,7 +65,7 @@ class CuemsDBProject(StringSanitizer):
         project_trash_list = list()
         projects_trash = Project.select().where(Project.in_trash == True).order_by(Project.created.desc())
         for project in projects_trash:
-            project_dict = {str(project.uuid): {'name': project.name, 'unix_name': project.unix_name, 'created': project.created, 'modified': project.modified} }
+            project_dict = {str(project.uuid): {'name': project.name, 'unix_name': project.unix_name, 'description': project.description, 'created': project.created, 'modified': project.modified} }
             project_trash_list.append(project_dict)
 
         return project_trash_list
