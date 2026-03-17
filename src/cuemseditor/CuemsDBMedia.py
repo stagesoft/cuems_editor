@@ -74,6 +74,7 @@ class CuemsDBMedia(StringSanitizer):
                         Logger.debug(f'creating thumbnail for movie: {dest_filename}')
                         dest_thumbnail_filename = None
                         dest_thumbnail_filename = self.create_video_thumbnail(dest_filename, media_duration)
+                        self.create_video_index(dest_filename)
                     elif _type is MediaType.AUDIO:
                         Logger.debug(f'creating thumbnail for audio: {dest_filename}')
                         dest_thumbnail_filename = None
@@ -461,6 +462,25 @@ class CuemsDBMedia(StringSanitizer):
             return waveform_file_path
         else:
             Logger.debug(f'waveform file not created for {filename}, output: {result.stdout.decode("utf8")}')
+
+    def create_video_index(self, filename):
+        """Run cuems-videoindexer to pre-build the frame index sidecar (.idx) for a video file."""
+        file_path = self.get_file_path(filename)
+        try:
+            result = subprocess.run(
+                ['cuems-videoindexer', file_path],
+                stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                timeout=300
+            )
+            idx_dir = os.path.join(self.media_path, 'indexes')
+            idx_path = os.path.join(idx_dir, os.path.basename(file_path) + '.idx')
+            if os.path.exists(idx_path):
+                Logger.debug(f'video index created for {filename}')
+            else:
+                Logger.warning(f'video index not created for {filename}: {result.stdout.decode("utf8")}')
+        except Exception as e:
+            Logger.warning(f'video index failed for {filename}: {e}')
+
     def get_file_path(self, filename, trash_state=False):
         if trash_state is False:
             return os.path.join(self.media_path, filename)
