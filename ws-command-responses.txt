@@ -39,6 +39,7 @@ Commands 													 ->	Responses
 
 {"action" : "hw_discovery"}   									->  {"type": "hw_discovery", "value": "hardware_json"}
 {"action" : "nodelist_modify", "value" : "node_uuid", "modify_action" : "ADD|REMOVE"}		->  {"type": "nodelist_modify", "value": "OK"}
+{"action" : "project_export", "value" : "project_uuid"}			->  {"type": "project_export", "value": exported_file_url}
 
 Error responses
 

@@ -69,6 +69,7 @@ class CuemsWsUser():
                     "project_trash_delete": lambda: self.request_delete_project_trash(value, action),
                     "project_list": lambda: self.list_project(action),
                     "project_duplicate": lambda: self.request_duplicate_project(value, action),
+                    "project_export": lambda: self.request_export_project(value, action),
                     "file_list": lambda: self.list_file(action),
                     "project_trash_list": lambda: self.list_project_trash(action),
                     "file_trash_list": lambda: self.list_file_trash(action),
@@ -365,7 +366,15 @@ class CuemsWsUser():
         except Exception as e:
             Logger.error("error: {} {}".format(type(e), e))
             await self.notify_error_to_user(str(e), uuid=project_uuid, action=action)
-
+    async def request_export_project(self, project_uuid, action):
+        try:
+            Logger.info("user {} exporting project: {}".format(id(self.websocket), project_uuid))
+            exported_file_url = await self.server.event_loop.run_in_executor(self.server.executor, self.server.db.project.export, project_uuid)
+            await self.outgoing.put(json.dumps({"type": action, "value": exported_file_url}))
+        except Exception as e:
+            Logger.error("error: {} {}".format(type(e), e))
+            await self.notify_error_to_user(str(e), uuid=project_uuid, action=action)
+            return
     async def list_file(self, action):
         Logger.info("user {} loading file list".format(id(self.websocket)))
         try:
