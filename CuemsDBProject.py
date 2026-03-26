@@ -85,6 +85,8 @@ class CuemsDBProject(StringSanitizer):
         # TODO: Remove this once frontend properly fetches duration via file_load_meta
         self._fix_media_durations(data)
 
+        self._clean_dangling_targets(data)
+
         with self.db.atomic() as transaction:
             try:
                 project.name=StringSanitizer.sanitize_name(data['CuemsScript']['name'])
@@ -143,6 +145,59 @@ class CuemsDBProject(StringSanitizer):
                                             logger.debug(f"Fixed duration for {file_name}: {old_duration} -> {media['duration']}")
                                 except DoesNotExist:
                                     logger.warning(f"Media not found in database: {file_name}")
+
+    CUE_TYPES = ['AudioCue', 'VideoCue', 'DmxCue', 'ActionCue', 'CueList']
+
+    def _clean_dangling_targets(self, data):
+        """Clear target and action_target references that point to non-existing cues.
+
+        When a cue is deleted in the frontend, any ActionCue (or regular cue)
+        still referencing it by UUID will have a dangling reference. This method
+        collects all cue UUIDs and nullifies any reference that cannot be resolved.
+        """
+        try:
+            cuelist = data.get('CuemsScript', {}).get('CueList', {})
+            contents = cuelist.get('contents', [])
+            all_ids = set()
+            self._collect_cue_ids(contents, all_ids)
+            self._nullify_dangling_refs(contents, all_ids)
+        except Exception as e:
+            Logger.warning(f"Could not clean dangling targets: {e}")
+
+    def _collect_cue_ids(self, contents, ids):
+        """Recursively collect all cue UUIDs from the project contents."""
+        if not contents:
+            return
+        for item in contents:
+            for cue_type in self.CUE_TYPES:
+                if cue_type in item:
+                    cue_data = item[cue_type]
+                    cue_id = cue_data.get('id')
+                    if cue_id:
+                        ids.add(cue_id)
+                    if cue_type == 'CueList':
+                        self._collect_cue_ids(cue_data.get('contents', []), ids)
+
+    def _nullify_dangling_refs(self, contents, valid_ids):
+        """Recursively clear target/action_target refs that point to non-existing cues."""
+        if not contents:
+            return
+        for item in contents:
+            for cue_type in self.CUE_TYPES:
+                if cue_type in item:
+                    cue_data = item[cue_type]
+                    if cue_type == 'CueList':
+                        self._nullify_dangling_refs(cue_data.get('contents', []), valid_ids)
+                        continue
+                    target = cue_data.get('target')
+                    if target and target not in valid_ids:
+                        Logger.warning(f"{cue_type} {cue_data.get('id')} has dangling target {target}, clearing")
+                        cue_data['target'] = None
+                    if cue_type == 'ActionCue':
+                        action_target = cue_data.get('action_target')
+                        if action_target and action_target not in valid_ids:
+                            Logger.warning(f"ActionCue {cue_data.get('id')} has dangling action_target {action_target}, clearing")
+                            cue_data['action_target'] = None
 
     def new(self, data, unix_name):
 
