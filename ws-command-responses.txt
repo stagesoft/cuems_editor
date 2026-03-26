@@ -17,6 +17,9 @@ Commands 													 ->	Responses
 {"action" : "project_load", "value" : "project_uuid"}   		->  {"type": "project", "value": "project_json"}
 {"action" : "project_ready", "value" : "project_uuid"}   		->  {"type": "project_ready", "value": "project_uuid"}
 {"action" : "project_deploy", "value" : "project_uuid"}   		->  {"type": "project_deploy", "value": "project_uuid"}
+{"action" : "project_status"}  									->  {"type": "project_status", "value":  {"status ": "none|running", "project_uuid": "project_uuid"}
+{"action" : "project_unload", "value" : "project_uuid"}   		->  {"type": "project_unload", "value": "project_uuid"}
+
 
 {"action" : "project_new", "value" : "project_json", "unix_name" : "unix_name_string"}   		->  {"type": "project_save", "value": "project_uuid"}
 {"action" : "project_save", "value" : "project_json"}   		->  {"type": "project_save", "value": "project_uuid"}

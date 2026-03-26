@@ -82,6 +82,8 @@ class CuemsWsUser():
                     "hw_discovery": lambda: self.hw_discovery(action),
                     "nodeconf": lambda: self.nodeconf(action),
                     "nodelist_modify": lambda: self.nodelist_modify(value, action, data.get("modify_action")),
+                    "project_status": lambda: self.project_status(action),
+                    "project_unload": lambda: self.project_unload(action),
                 }
 
                 if action in action_map:
@@ -96,7 +98,7 @@ class CuemsWsUser():
                 Logger.error("error: {} {}".format(type(e), e))
                 await self.notify_error_to_user('error processing request')
 
-    async def comunicate_with_engine(self, action, action_uuid, engine_command):
+    async def comunicate_with_engine(self, action, action_uuid, engine_command, query_mode=False):
         try:
             async with asyncio.timeout(TIMEOUT):
                 response = await self.server.engine_communicator.send_request(engine_command)
@@ -126,7 +128,7 @@ class CuemsWsUser():
         if response['type'] != action:
             raise EngineError(f'Response type mismatch. Expected: {action}, Got: {response["type"]}')
 
-        if response.get('value') != 'OK':
+        if not query_mode and response.get('value') != 'OK':
             raise EngineError(f'Engine reports error: {response.get("value", "Unknown error")}')
 
         Logger.debug(f'Engine response for {action} is OK')
@@ -192,6 +194,38 @@ class CuemsWsUser():
         except Exception as e:
             Logger.error("error: {} {}".format(type(e), e))
             await self.notify_error_to_user(str(e), action=action )
+
+    async def project_status(self, action):
+        Logger.info(f"user {id(self.websocket)} requesting {functionNameAsString()}")
+        try:
+            action_uuid = str(new_uuid())
+            engine_command = {"action": functionNameAsString(), "action_uuid": action_uuid}
+
+            result = await self.comunicate_with_engine(action, action_uuid, engine_command, query_mode=True)
+
+            await self.outgoing.put(json.dumps({"type": functionNameAsString(), "value": result}))
+
+        except Exception as e:
+            Logger.error(f"error: {type(e)} {e}")
+            await self.notify_error_to_user(str(e), action=action)
+
+    async def project_unload(self, action):
+        Logger.info(f"user {id(self.websocket)} requesting {functionNameAsString()}")
+        try:
+            action_uuid = str(new_uuid())
+            engine_command = {"action": functionNameAsString(), "action_uuid": action_uuid}
+
+            result = await self.comunicate_with_engine(action, action_uuid, engine_command)
+
+            self.server.users[self] = None
+            if self.session_id and self.session_id in self.server.sessions:
+                self.server.sessions[self.session_id]['loaded_project'] = None
+
+            await self.outgoing.put(json.dumps({"type": functionNameAsString(), "value": "OK"}))
+
+        except Exception as e:
+            Logger.error(f"error: {type(e)} {e}")
+            await self.notify_error_to_user(str(e), action=action)
 
     async def nodelist_modify(self, node_uuid, action, modify_action):
         Logger.info(f"user {id(self.websocket)} requesting {functionNameAsString()} for node {node_uuid} with action {modify_action}")
