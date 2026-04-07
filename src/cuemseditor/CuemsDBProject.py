@@ -279,6 +279,7 @@ class CuemsDBProject(StringSanitizer):
                     dest_filename = None
                     project_path = os.path.join(self.trash_path, project_trash.unix_name)
                     dest_filename = CopyMoveVersioned.move(project_path, self.projects_path, project_trash.unix_name)
+                    project_trash.unix_name = dest_filename
                     project_trash.in_trash = False
                     project_trash.save()
                     Logger.debug('updating instance in db: {}'.format(project_trash))
