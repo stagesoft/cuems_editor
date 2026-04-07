@@ -191,6 +191,14 @@ class CuemsDBProject(StringSanitizer):
                              
                 raise e
 
+    def _is_name_available(self, unix_name, display_name):
+        """Check that both unix_name and display_name are free in the DB
+        (including trashed records, since unique constraints span all rows).
+        """
+        return not Project.select().where(
+            (Project.unix_name == unix_name) | (Project.name == display_name)
+        ).exists()
+
     def duplicate(self, uuid):
         try:
             project = Project.get((Project.uuid==uuid) & (Project.in_trash == False))
@@ -198,11 +206,27 @@ class CuemsDBProject(StringSanitizer):
                 try:
                     new_unix_name = None
                     project_path = os.path.join(self.projects_path, project.unix_name)
-                    new_unix_name = CopyMoveVersioned.copy_dir(project_path, self.projects_path, project.unix_name)
+                    base_unix = project.unix_name
+                    base_display = project.name + ' - Copy'
+
+                    # Find a name pair unique on both filesystem AND DB
+                    # (trashed projects keep their DB records and unique constraints)
+                    candidate_unix = base_unix
+                    candidate_display = base_display
+                    i = 0
+                    while (os.path.exists(os.path.join(self.projects_path, candidate_unix))
+                           or not self._is_name_available(candidate_unix, candidate_display)):
+                        i += 1
+                        candidate_unix = f"{base_unix}-{i:03d}"
+                        candidate_display = f"{base_display} ({i})"
+
+                    shutil.copytree(project_path, os.path.join(self.projects_path, candidate_unix))
+                    new_unix_name = candidate_unix
+
                     project.unix_name = new_unix_name
                     new_project_uuid = str(new_uuid())
                     project.uuid = new_project_uuid
-                    project.name = project.name + ' - Copy'
+                    project.name = candidate_display
                     project.modified=new_datetime()
                     project.save(force_insert=True)
 
