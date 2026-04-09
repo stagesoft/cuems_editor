@@ -259,8 +259,12 @@ class CuemsDBProject(StringSanitizer):
 
                     dup_project= Project.get(Project.uuid==new_project_uuid)
                     data = self.load_xml(dup_project.unix_name)
+                    data['CuemsScript']['id'] = new_project_uuid
+                    data['CuemsScript']['name'] = project.name
+                    data['CuemsScript']['modified'] = project.modified
                     project_object = CuemsParser(data).parse()
                     self.add_media_relations(dup_project, project_object)
+                    self.save_xml(new_unix_name, project_object)
                     return new_project_uuid
                 except Exception as e:
                     Logger.error("error: {} {}; trying to duplicate  project, rolling back database update".format(type(e), e))
