@@ -444,7 +444,7 @@ class CuemsDBMedia(StringSanitizer):
         file_path = self.get_file_path(filename)
         thumbnail_file_path = self.get_thumbnail_path(filename)
         #TODO: support 24-bit data
-        result = subprocess.run(['audiowaveform', '-i', file_path, '-o', thumbnail_file_path, '-e', str(duration.milliseconds/1000), '-w', str(self.thumbnail_size[0]), '-h', str(self.thumbnail_size[1]), '--no-axis-labels', '--amplitude-scale', '0.9'], stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        result = subprocess.run(['audiowaveform', '-i', file_path, '-o', thumbnail_file_path, '-e', str(duration.milliseconds_rounded / 1000), '-w', str(self.thumbnail_size[0]), '-h', str(self.thumbnail_size[1]), '--no-axis-labels', '--amplitude-scale', '0.9'], stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
         
         if os.path.exists(thumbnail_file_path):
             return thumbnail_file_path

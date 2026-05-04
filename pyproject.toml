@@ -24,7 +24,7 @@ classifiers = [
     "Topic :: Internet :: WWW/HTTP :: Dynamic Content",
 ]
 dependencies = [
-    "cuemsutils>=0.1.0rc4",
+    "cuemsutils>=0.1.0rc6",
     "peewee>=3.17.0",
     "websockets>=14.0",
 ]
