@@ -248,8 +248,16 @@ class CuemsWsServer():
                 # Node exists - merge data
                 existing_node = existing_by_uuid[uuid]['node'].copy()
                 
-                # Update basic fields from network_map (online, adopted, ip, name, etc.)
-                basic_fields = ['online', 'adopted', 'ip', 'name', 'node_type', 'mac']
+                # Update basic fields from network_map (online, adopted, ip, name, etc.).
+                # role_id/alias/hostname are the optional identity fields
+                # introduced by feat/node-identity in cuems-common: see
+                # docs/node-identity-contract.md in cuems-common. They drive
+                # the frontend's human-readable node label and cuems-logs'
+                # -n filter resolution. Propagate them like the rest of the
+                # mutable state so the UI sees changes after nodeconf updates
+                # the XML (e.g. after an adoption or apply-identity).
+                basic_fields = ['online', 'adopted', 'ip', 'name', 'node_type', 'mac',
+                                'role_id', 'alias', 'hostname']
                 for field in basic_fields:
                     if field in new_node:
                         existing_node[field] = new_node[field]
