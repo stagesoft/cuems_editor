@@ -179,6 +179,8 @@ class CuemsDBProject(StringSanitizer):
         # TODO: Remove this once frontend properly fetches duration via file_load_meta
         self._fix_media_durations(data)
 
+        self._clean_dangling_targets(data)
+
         with self.db.atomic() as transaction:
             try:
                 project.name = StringSanitizer.sanitize_name(data['CuemsScript']['name'])
@@ -241,6 +243,59 @@ class CuemsDBProject(StringSanitizer):
                             media['duration'] = str(db_media.duration)
                     except DoesNotExist:
                         pass  # Media not in database, keep original duration
+
+    CUE_TYPES = ['AudioCue', 'VideoCue', 'DmxCue', 'ActionCue', 'CueList']
+
+    def _clean_dangling_targets(self, data):
+        """Clear target and action_target references that point to non-existing cues.
+
+        When a cue is deleted in the frontend, any ActionCue (or regular cue)
+        still referencing it by UUID will have a dangling reference. This method
+        collects all cue UUIDs and nullifies any reference that cannot be resolved.
+        """
+        try:
+            cuelist = data.get('CuemsScript', {}).get('CueList', {})
+            contents = cuelist.get('contents', [])
+            all_ids = set()
+            self._collect_cue_ids(contents, all_ids)
+            self._nullify_dangling_refs(contents, all_ids)
+        except Exception as e:
+            Logger.warning(f"Could not clean dangling targets: {e}")
+
+    def _collect_cue_ids(self, contents, ids):
+        """Recursively collect all cue UUIDs from the project contents."""
+        if not contents:
+            return
+        for item in contents:
+            for cue_type in self.CUE_TYPES:
+                if cue_type in item:
+                    cue_data = item[cue_type]
+                    cue_id = cue_data.get('id')
+                    if cue_id:
+                        ids.add(cue_id)
+                    if cue_type == 'CueList':
+                        self._collect_cue_ids(cue_data.get('contents', []), ids)
+
+    def _nullify_dangling_refs(self, contents, valid_ids):
+        """Recursively clear target/action_target refs that point to non-existing cues."""
+        if not contents:
+            return
+        for item in contents:
+            for cue_type in self.CUE_TYPES:
+                if cue_type in item:
+                    cue_data = item[cue_type]
+                    if cue_type == 'CueList':
+                        self._nullify_dangling_refs(cue_data.get('contents', []), valid_ids)
+                        continue
+                    target = cue_data.get('target')
+                    if target and target not in valid_ids:
+                        Logger.warning(f"{cue_type} {cue_data.get('id')} has dangling target {target}, clearing")
+                        cue_data['target'] = None
+                    if cue_type == 'ActionCue':
+                        action_target = cue_data.get('action_target')
+                        if action_target and action_target not in valid_ids:
+                            Logger.warning(f"ActionCue {cue_data.get('id')} has dangling action_target {action_target}, clearing")
+                            cue_data['action_target'] = None
 
     def new(self, data, unix_name):
         """Create a new project: allocate a UUID, write the XML, insert the DB row.
@@ -364,8 +419,12 @@ class CuemsDBProject(StringSanitizer):
 
                     dup_project = Project.get(Project.uuid == new_project_uuid)
                     data = self.load_xml(dup_project.unix_name)
+                    data['CuemsScript']['id'] = new_project_uuid
+                    data['CuemsScript']['name'] = project.name
+                    data['CuemsScript']['modified'] = project.modified
                     project_object = CuemsParser(data).parse()
                     self.add_media_relations(dup_project, project_object)
+                    self.save_xml(new_unix_name, project_object)
                     return new_project_uuid
                 except Exception as e:
                     Logger.error("error: {} {}; trying to duplicate  project, rolling back database update".format(type(e), e))
@@ -378,6 +437,60 @@ class CuemsDBProject(StringSanitizer):
 
         except DoesNotExist:
             raise NonExistentItemError("item with uuid: {} does not exist".format(uuid))
+
+    def export(self, uuid):
+        tmp_project_path = None
+        output_filename = None
+        try:
+            try:
+                project = Project.get(Project.uuid==uuid)
+            except DoesNotExist:
+                raise NonExistentItemError("item with uuid: {} does not exist".format(uuid))
+
+            unix_name = project.unix_name
+            project_path = os.path.join(self.projects_path, unix_name, self.script_file_name)
+            project_medias = ProjectMedia.select().where(ProjectMedia.project == project)
+            tmp_project_path = os.path.join(self.tmp_path, unix_name)
+            if not os.path.exists(tmp_project_path):
+                os.makedirs(tmp_project_path)
+            Logger.debug('exporting project {} to {}'.format(unix_name, tmp_project_path))
+            shutil.copy(project_path, tmp_project_path)
+
+            project_medias = prefetch(project_medias, Media)
+            if project_medias:
+                Logger.debug('project {} has media relations, exporting them'.format(unix_name))
+                tmp_media_path = os.path.join(tmp_project_path, 'media')
+                os.makedirs(tmp_media_path)
+                for media in project_medias:
+                    media_path = os.path.join(self.media_path, media.media.unix_name)
+                    try:
+                        shutil.copy(media_path, tmp_media_path)
+                        Logger.debug('copying media {} to {}'.format(media.media.unix_name, tmp_media_path))
+                    except Exception as e:
+                        Logger.error("error: {} {}; copying media to project export dir".format(type(e), e))
+                        raise e
+            else:
+                Logger.debug('project {} has no media relations, skipping media export'.format(unix_name))
+
+            shutil.make_archive(tmp_project_path, 'zip', self.tmp_path, unix_name)
+            output_filename = unix_name + '.zip'
+            server_export_path = os.path.join(self.settings_dict['html_root_path'], self.settings_dict['export_folder_name'])
+            try:
+                dest_filename = CopyMoveVersioned.move(os.path.join(self.tmp_path, output_filename), server_export_path, output_filename)
+                return os.path.join(self.settings_dict['export_folder_name'], dest_filename)
+            except Exception as e:
+                Logger.error("error: {} {}; moving exported project to exports folder".format(type(e), e))
+                raise e
+        except Exception as e:
+            Logger.error("error: {} {}; exporting project".format(type(e), e))
+            raise e
+        finally:
+            if tmp_project_path is not None and os.path.exists(tmp_project_path):
+                shutil.rmtree(tmp_project_path)
+                Logger.debug('cleaning tmp project export folder: {}'.format(tmp_project_path))
+            if output_filename is not None and os.path.exists(os.path.join(self.tmp_path, output_filename)):
+                os.remove(os.path.join(self.tmp_path, output_filename))
+                Logger.debug('cleaning tmp project export file: {}'.format(os.path.join(self.tmp_path, output_filename)))
 
     def delete(self, uuid):
         """Soft-delete a project by moving it to the trash directory.

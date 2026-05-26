@@ -48,6 +48,8 @@ def get_settings():
     settings_dict['waveform_extension'] = '.dat'
     settings_dict['thumbnail_size'] = (240, 240)
     settings_dict['editor_ipc'] = '/tmp/editor.ipc'
+    settings_dict['html_root_path'] = '/var/www/cuems'
+    settings_dict['export_folder_name'] = 'exports'
     return settings_dict
 
 
