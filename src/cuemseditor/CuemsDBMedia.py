@@ -1,7 +1,7 @@
 import os
+import math
 import shutil
 import subprocess
-import re
 import struct
 from cuemsutils.helpers import new_uuid
 
@@ -17,6 +17,59 @@ from cuemsutils.helpers import new_datetime
 
 from cuemseditor.CuemsDBModel import Project, Media, ProjectMedia
 from cuemseditor.CuemsErrors import *
+
+
+FFPROBE_TIMEOUT = 30  # seconds; local-disk probes finish in <1s, NFS/USB headroom
+
+
+def probe_duration(file_path):
+    """Probe a media file's duration with ffprobe and return a ``CTimecode``.
+
+    Runs ``ffprobe -show_entries format=duration`` (plain float seconds, NOT
+    ``-sexagesimal``) and constructs ``CTimecode(start_seconds=...)`` which
+    canonicalises correctly at every framerate including the whole-second carry
+    boundary. This replaces the previous sexagesimal-string reformatting hack,
+    which silently corrupted any duration whose millisecond fraction ended in a
+    zero (stored short by up to ~0.9 s) and mangled the carry case into a
+    minutes-long overshoot.
+
+    Args:
+        file_path: Absolute path to the media file.
+
+    Returns:
+        ``CTimecode`` at the default ms framerate (``str()`` → ``HH:MM:SS.mmm``).
+
+    Raises:
+        NotTimeCodeError: on any failure — ffprobe timeout, non-zero exit,
+            empty / ``N/A`` / non-numeric / non-finite / negative output.
+    """
+    cmd = ['ffprobe', '-v', 'error',
+           '-show_entries', 'format=duration',
+           '-of', 'default=noprint_wrappers=1:nokey=1', file_path]
+    try:
+        result = subprocess.run(cmd, stdout=subprocess.PIPE,
+                                stderr=subprocess.PIPE, timeout=FFPROBE_TIMEOUT)
+    except subprocess.TimeoutExpired as e:
+        raise NotTimeCodeError(
+            f'ffprobe timed out after {FFPROBE_TIMEOUT}s for {file_path}') from e
+    if result.returncode != 0:
+        stderr = result.stderr.decode('utf8', errors='replace').strip()
+        raise NotTimeCodeError(
+            f'ffprobe failed (rc={result.returncode}) for {file_path}: {stderr}')
+    out = result.stdout.decode('utf8').strip()
+    if not out or out == 'N/A':
+        raise NotTimeCodeError(f'ffprobe returned no duration ({out!r}) for {file_path}')
+    try:
+        seconds = float(out)
+    except ValueError as e:
+        raise NotTimeCodeError(f'ffprobe output not a number: {out!r}') from e
+    # float() accepts 'nan'/'inf' silently; those blow up inside CTimecode
+    # (ValueError / OverflowError) rather than raising our contract exception.
+    if not math.isfinite(seconds):
+        raise NotTimeCodeError(f'ffprobe returned non-finite duration {out!r} for {file_path}')
+    if seconds < 0:
+        raise NotTimeCodeError(f'ffprobe returned negative duration {seconds} for {file_path}')
+    return CTimecode(start_seconds=seconds)
 
 
 class MediaType(Enum):
@@ -143,7 +196,10 @@ class CuemsDBMedia(StringSanitizer):
                         Logger.debug(f'creating thumbnail for audio: {dest_filename}')
                         dest_thumbnail_filename = None
                         dest_waveform_filename = None
-                        dest_thumbnail_filename = self.create_audio_thubnail(dest_filename, media_duration)
+                        if media_duration is not None:
+                            dest_thumbnail_filename = self.create_audio_thubnail(dest_filename, media_duration)
+                        else:
+                            Logger.warning(f'no duration for {dest_filename}; skipping audio waveform thumbnail')
                         dest_waveform_filename = self.create_audio_waveform(dest_filename)
                     elif _type is MediaType.IMAGE:
                         Logger.debug(f'creating thumbnail for image: {dest_filename}')
@@ -182,9 +238,12 @@ class CuemsDBMedia(StringSanitizer):
 
         Returns:
             List of single-key dicts ``{uuid_str: {name, unix_name, created,
-            modified, type, in_projects, in_projects_list, in_trash_projects}}``,
-            ordered by ``created`` descending.  ``in_projects_list`` is a list
-            of ``{uuid, name, in_trash}`` dicts for each referencing project.
+            modified, duration, type, in_projects, in_projects_list,
+            in_trash_projects}}``, ordered by ``created`` descending.
+            ``duration`` is the ``CTimecode`` string (or ``None``); the frontend
+            copies it into cue ``Media.duration`` on save.  ``in_projects_list``
+            is a list of ``{uuid, name, in_trash}`` dicts for each referencing
+            project.
         """
         media_list = list()
 
@@ -208,7 +267,7 @@ class CuemsDBMedia(StringSanitizer):
                 project_dict = {'uuid': str(project.uuid), 'name': project.name, 'in_trash': project.in_trash}
                 project_list.append(project_dict)
 
-            media_dict = {str(media.uuid): {'name': media.name, 'unix_name': media.unix_name, 'created': media.created, 'modified': media.modified, 'type': media.media_type, "in_projects": media.in_project_count, "in_projects_list": project_list, "in_trash_projects": media.in_project_trash_count}}
+            media_dict = {str(media.uuid): {'name': media.name, 'unix_name': media.unix_name, 'created': media.created, 'modified': media.modified, 'duration': media.duration, 'type': media.media_type, "in_projects": media.in_project_count, "in_projects_list": project_list, "in_trash_projects": media.in_project_trash_count}}
             media_list.append(media_dict)
 
         return media_list
@@ -223,7 +282,7 @@ class CuemsDBMedia(StringSanitizer):
         media_list = list()
 
         medias = (Media
-                  .select(Media.uuid, Media.name, Media.unix_name, Media.created, Media.modified, Media.media_type,
+                  .select(Media.uuid, Media.name, Media.unix_name, Media.created, Media.modified, Media.duration, Media.media_type,
                           fn.COUNT(Case(Project.in_trash, (('0', 1),), None)).alias('in_project_count'),
                           fn.COUNT(Case(Project.in_trash, (('1', 1),), None)).alias('in_project_trash_count'))
                   .join(ProjectMedia, JOIN.LEFT_OUTER)
@@ -231,7 +290,7 @@ class CuemsDBMedia(StringSanitizer):
                   .where(Media.in_trash == True)
                   .group_by(Media.uuid).order_by(Media.created.desc()))
         for media in medias:
-            media_dict = {str(media.uuid): {'name': media.name, 'unix_name': media.unix_name, 'created': media.created, 'modified': media.modified, 'type': media.media_type, "in_projects": media.in_project_count, "in_trash_projects": media.in_project_trash_count}}
+            media_dict = {str(media.uuid): {'name': media.name, 'unix_name': media.unix_name, 'created': media.created, 'modified': media.modified, 'duration': media.duration, 'type': media.media_type, "in_projects": media.in_project_count, "in_trash_projects": media.in_project_trash_count}}
             media_list.append(media_dict)
 
         return media_list
@@ -585,11 +644,11 @@ class CuemsDBMedia(StringSanitizer):
             return False
 
     def get_duration(self, filename):
-        """Extract media duration using ``ffprobe`` and return a ``CTimecode``.
+        """Extract a media file's duration and return a ``CTimecode``.
 
-        Runs ``ffprobe -sexagesimal`` to get the duration in
-        ``HH:MM:SS.ffffff`` format, then rounds sub-millisecond precision to
-        three decimal places before constructing a ``CTimecode``.
+        Thin wrapper around the module-level :func:`probe_duration`, resolving
+        *filename* against ``media_path``. Kept as a method so callers with a
+        ``CuemsDBMedia`` instance need not know the media directory layout.
 
         Args:
             filename: Filename of the media file inside ``<media_path>``.
@@ -598,29 +657,10 @@ class CuemsDBMedia(StringSanitizer):
             ``CTimecode`` instance representing the media duration.
 
         Raises:
-            NotTimeCodeError: If ``ffprobe`` output does not match the
-                expected ``HH:MM:SS.ffffff`` pattern.
+            NotTimeCodeError: If the duration cannot be probed (see
+                :func:`probe_duration`).
         """
-        # ffprobe -sexagesimal -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 audio.wav
-        timecode_pattern = r'^([\d]{1,2}:[\d]{2}:[\d]{2})(\.[\d]{6})'
-        file_path = os.path.join(self.media_path, filename)
-        result = subprocess.run(['ffprobe', '-sexagesimal', '-v', 'error', '-show_entries', 'format=duration', '-of', 'default=noprint_wrappers=1:nokey=1', file_path], stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-        result_string = result.stdout.decode('utf8').strip()
-        duration_match = re.match(timecode_pattern, result_string)
-        if duration_match:
-            # TODO: remove this ugly hack and let CTimecode handle extra digits
-            millis = duration_match.group(2)
-            millis = round(float(millis), 3)
-            if str(millis)[0:1] == '1':
-                millis = '0.9'
-            else:
-                millis = str(millis)[1:]
-            duration = CTimecode(f'{duration_match.group(1)}{millis}')
-            # when CTimecode works let this handle extra digits
-            #duration = CTimecode(duration_match.group())
-            return duration
-        else:
-            raise NotTimeCodeError('ffprobe output does not match timecode format')
+        return probe_duration(os.path.join(self.media_path, filename))
 
     @logged
     def create_video_thumbnail(self, filename, duration):
@@ -642,13 +682,18 @@ class CuemsDBMedia(StringSanitizer):
         # ffmpeg -y -hide_banner -loglevel warning -i input.mov -vf "scale=240:-1" -frames:v 1 -update true out.png
         file_path = self.get_file_path(filename)
         thumbnail_file_path = self.get_thumbnail_path(filename)
-        if duration is None:
-            result = subprocess.run(['ffmpeg', '-y', '-hide_banner', '-loglevel', 'warning', '-i', file_path, '-vf', f'scale={str(self.thumbnail_size[0])}:-1', '-frames:v', '1', '-update', 'true', thumbnail_file_path], stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-        else:
-            time_option = "-ss"
-            timecode = f'200ms'
-            result = subprocess.run(['ffmpeg', time_option, timecode, '-y', '-hide_banner', '-loglevel', 'warning', '-i', file_path, '-vf', f'scale={str(self.thumbnail_size[0])}:-1', '-vframes', '1', '-update', 'true', thumbnail_file_path], stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-
+        try:
+            if duration is None:
+                result = subprocess.run(['ffmpeg', '-y', '-hide_banner', '-loglevel', 'warning', '-i', file_path, '-vf', f'scale={str(self.thumbnail_size[0])}:-1', '-frames:v', '1', '-update', 'true', thumbnail_file_path], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=120)
+            else:
+                time_option = "-ss"
+                timecode = f'200ms'
+                result = subprocess.run(['ffmpeg', time_option, timecode, '-y', '-hide_banner', '-loglevel', 'warning', '-i', file_path, '-vf', f'scale={str(self.thumbnail_size[0])}:-1', '-vframes', '1', '-update', 'true', thumbnail_file_path], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=120)
+        except subprocess.TimeoutExpired:
+            Logger.warning(f'ffmpeg thumbnail timed out for {filename}')
+            return None
+        if result.returncode != 0:
+            Logger.warning(f'ffmpeg thumbnail rc={result.returncode} for {filename}: {result.stdout.decode("utf8")}')
         if os.path.exists(thumbnail_file_path):
             Logger.debug(f'thumbnail file created for {filename}, output: {result.stdout.decode("utf8")}')
             return thumbnail_file_path
@@ -675,8 +720,13 @@ class CuemsDBMedia(StringSanitizer):
         file_path = self.get_file_path(filename)
         thumbnail_file_path = self.get_thumbnail_path(filename)
         # TODO: support 24-bit data
-        result = subprocess.run(['audiowaveform', '-i', file_path, '-o', thumbnail_file_path, '-e', str(duration.milliseconds_rounded / 1000), '-w', str(self.thumbnail_size[0]), '-h', str(self.thumbnail_size[1]), '--no-axis-labels', '--amplitude-scale', '0.9'], stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-
+        try:
+            result = subprocess.run(['audiowaveform', '-i', file_path, '-o', thumbnail_file_path, '-e', str(duration.milliseconds_rounded / 1000), '-w', str(self.thumbnail_size[0]), '-h', str(self.thumbnail_size[1]), '--no-axis-labels', '--amplitude-scale', '0.9'], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=120)
+        except subprocess.TimeoutExpired:
+            Logger.warning(f'audiowaveform thumbnail timed out for {filename}')
+            return None
+        if result.returncode != 0:
+            Logger.warning(f'audiowaveform thumbnail rc={result.returncode} for {filename}: {result.stdout.decode("utf8")}')
         if os.path.exists(thumbnail_file_path):
             return thumbnail_file_path
         else:
@@ -697,8 +747,13 @@ class CuemsDBMedia(StringSanitizer):
         # audiowaveform -i sample.wav -o sample.dat -b 8
         file_path = self.get_file_path(filename)
         waveform_file_path = self.get_waveform_path(filename)
-        result = subprocess.run(['audiowaveform', '-i', file_path, '-o', waveform_file_path, '-b', '8'], stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-
+        try:
+            result = subprocess.run(['audiowaveform', '-i', file_path, '-o', waveform_file_path, '-b', '8'], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=120)
+        except subprocess.TimeoutExpired:
+            Logger.warning(f'audiowaveform data timed out for {filename}')
+            return None
+        if result.returncode != 0:
+            Logger.warning(f'audiowaveform data rc={result.returncode} for {filename}: {result.stdout.decode("utf8")}')
         if os.path.exists(waveform_file_path):
             Logger.debug(f'waveform file created for {filename}, output: {result.stdout.decode("utf8")}')
             return waveform_file_path
