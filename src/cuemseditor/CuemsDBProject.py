@@ -15,6 +15,90 @@ from cuemseditor.CuemsErrors import *
 from cuemseditor.CuemsDBModel import Project, Media, ProjectMedia
 
 
+class DurationFixStats:
+    """Result of a :func:`fix_media_durations_in_contents` walk.
+
+    Attributes:
+        media_refs: Number of cue ``Media`` blocks visited.
+        replacements: Number of ``duration`` values actually changed.
+        orphans: List of ``file_name`` values referencing a media file with no
+            ``Media`` row (duration left untouched — a leftover
+            ``00:00:00.000`` there matches the valid timecode shape, so it is
+            invisible to a pattern scan; report it explicitly instead).
+    """
+
+    def __init__(self):
+        self.media_refs = 0
+        self.replacements = 0
+        self.orphans = []
+
+
+def db_duration_resolver(file_name):
+    """Resolve a media ``unix_name`` to its stored duration string (or ``None``).
+
+    Raises ``KeyError`` when no ``Media`` row exists for *file_name*, so the
+    walk can distinguish an orphaned reference from a present-but-NULL duration.
+    """
+    try:
+        media = Media.get(Media.unix_name == file_name)
+    except DoesNotExist:
+        raise KeyError(file_name)
+    return media.duration
+
+
+def fix_media_durations_in_contents(contents, resolver):
+    """Overwrite each cue ``Media['duration']`` from *resolver*, in place.
+
+    Shared by the WebSocket save path (:meth:`CuemsDBProject._fix_media_durations`)
+    and the standalone duration-repair script, so both trust the same DB source
+    of truth and walk cue trees identically.
+
+    Args:
+        contents: ``CueList['contents']`` list (recursively walked).
+        resolver: callable ``file_name -> duration_str_or_None``; must raise
+            ``KeyError`` for a media file absent from the DB.
+
+    Returns:
+        :class:`DurationFixStats`.
+    """
+    stats = DurationFixStats()
+    _walk_media_durations(contents, resolver, stats)
+    return stats
+
+
+def _walk_media_durations(contents, resolver, stats):
+    if not contents:
+        return
+    for item in contents:
+        # Handle nested CueLists
+        if 'CueList' in item:
+            _walk_media_durations(item['CueList'].get('contents', []), resolver, stats)
+
+        # Check for AudioCue or VideoCue wrappers
+        if 'AudioCue' in item:
+            cue_data = item['AudioCue']
+        elif 'VideoCue' in item:
+            cue_data = item['VideoCue']
+        else:
+            cue_data = item  # flat structure
+
+        media = cue_data.get('Media') if isinstance(cue_data, dict) else None
+        if media and isinstance(media, dict):
+            file_name = media.get('file_name')
+            if file_name:
+                stats.media_refs += 1
+                try:
+                    duration = resolver(file_name)
+                except KeyError:
+                    stats.orphans.append(file_name)  # media not in DB; keep original
+                    continue
+                if duration:
+                    new_value = str(duration)
+                    if media.get('duration') != new_value:
+                        media['duration'] = new_value
+                        stats.replacements += 1
+
+
 class CuemsDBProject(StringSanitizer):
     """Project CRUD, XML script I/O, and filesystem directory management.
 
@@ -175,8 +259,12 @@ class CuemsDBProject(StringSanitizer):
         except KeyError:
             pass
 
-        # TEMPORARY FIX: Frontend doesn't send correct media duration, fix it from database
-        # TODO: Remove this once frontend properly fetches duration via file_load_meta
+        # SAFETY NET: older frontends send Media.duration as '00:00:00.000';
+        # overwrite from the DB (source of truth) before saving.
+        # As of the media-duration fix, the frontend copies the real duration
+        # from the file_list payload (CuemsDBMedia.list() now carries a
+        # 'duration' key) — remove this net only once ALL deployed frontends
+        # AND editors are >= those versions.
         self._fix_media_durations(data)
 
         self._clean_dangling_targets(data)
@@ -197,52 +285,26 @@ class CuemsDBProject(StringSanitizer):
                 transaction.rollback()
                 raise e
 
-    # TEMPORARY FIX: Frontend doesn't send correct media duration
-    # TODO: Remove this once frontend properly fetches duration via file_load_meta
+    # SAFETY NET (see update()): overwrite frontend-sent Media durations from
+    # the DB. Delegates to the module-level fix_media_durations_in_contents so
+    # the repair script and this path share one walk.
     def _fix_media_durations(self, data):
-        """Fix media durations in project data from database.
+        """Overwrite each cue's ``Media.duration`` from the database.
 
-        The frontend sends duration as '00:00:00.000' even though the database
-        has the correct duration. This method looks up each media file's duration
-        from the database and updates it in the project data before saving.
+        The DB is the source of truth for media duration. This corrects the
+        legacy frontend behaviour of sending ``00:00:00.000``. Orphaned media
+        references (no ``Media`` row) are logged, not modified.
         """
         try:
             cuelist = data.get('CuemsScript', {}).get('CueList', {})
             contents = cuelist.get('contents', [])
-            self._fix_durations_recursive(contents)
+            stats = fix_media_durations_in_contents(contents, db_duration_resolver)
+            if stats.orphans:
+                Logger.warning(
+                    f"media duration fix: {len(stats.orphans)} cue(s) reference "
+                    f"media not in DB (duration left as-is): {stats.orphans}")
         except Exception as e:
             Logger.warning(f"Could not fix media durations: {e}")
-
-    def _fix_durations_recursive(self, contents):
-        """Recursively fix media durations in cue contents."""
-        if not contents:
-            return
-
-        for item in contents:
-            # Handle nested CueLists
-            if 'CueList' in item:
-                nested_contents = item['CueList'].get('contents', [])
-                self._fix_durations_recursive(nested_contents)
-
-            # Check for AudioCue or VideoCue wrappers
-            cue_data = None
-            if 'AudioCue' in item:
-                cue_data = item['AudioCue']
-            elif 'VideoCue' in item:
-                cue_data = item['VideoCue']
-            else:
-                cue_data = item  # flat structure
-
-            media = cue_data.get('Media') if isinstance(cue_data, dict) else None
-            if media and isinstance(media, dict):
-                file_name = media.get('file_name')
-                if file_name:
-                    try:
-                        db_media = Media.get(Media.unix_name == file_name)
-                        if db_media.duration:
-                            media['duration'] = str(db_media.duration)
-                    except DoesNotExist:
-                        pass  # Media not in database, keep original duration
 
     CUE_TYPES = ['AudioCue', 'VideoCue', 'DmxCue', 'ActionCue', 'CueList']
 
