@@ -5,6 +5,7 @@ from peewee import DoesNotExist, IntegrityError, prefetch
 
 from cuemsutils.tools.StringSanitizer import StringSanitizer
 from cuemsutils.tools.CopyMoveVersioned import CopyMoveVersioned
+from cuemsutils.tools.CTimecode import CTimecode
 from cuemsutils.xml.Parsers import CuemsParser
 from cuemsutils.xml.XmlReaderWriter import XmlReaderWriter
 from cuemsutils.helpers import new_datetime, new_uuid
@@ -97,6 +98,74 @@ def _walk_media_durations(contents, resolver, stats):
                     if media.get('duration') != new_value:
                         media['duration'] = new_value
                         stats.replacements += 1
+
+
+def _fade_duration_ms(duration):
+    """Best-effort milliseconds for a FadeCue ``duration`` JSON value.
+
+    *duration* is the raw JSON shape the frontend/XML round-trip produces:
+    ``{'CTimecode': '<timecode string>'}`` (dict possibly empty or with a
+    ``None`` value) or ``None``.  Parsing delegates to the real ``CTimecode``
+    on purpose: its millisecond semantics are literal and non-obvious
+    (``'.3'`` is 3 ms, not 300) and some shapes raise (``'00:00:03'`` →
+    ``IndexError``), so a hand-rolled parser here would silently diverge from
+    what the engine computes when it loads the same string.  Any parse
+    failure returns ``None``.
+    """
+    if isinstance(duration, dict):
+        duration = duration.get('CTimecode')
+    if not isinstance(duration, str) or not duration.strip():
+        return None
+    try:
+        return CTimecode(duration).milliseconds_rounded
+    except Exception:
+        return None
+
+
+def _walk_fade_durations(contents, offenders):
+    if not contents:
+        return
+    for item in contents:
+        if not isinstance(item, dict):
+            continue
+        if 'CueList' in item:
+            _walk_fade_durations(item['CueList'].get('contents', []), offenders)
+        if 'FadeCue' in item:
+            cue_data = item['FadeCue']
+            if not isinstance(cue_data, dict):
+                continue
+            ms = _fade_duration_ms(cue_data.get('duration'))
+            if ms is None or ms <= 0:
+                reason = (
+                    'missing or unparseable'
+                    if ms is None else 'must be greater than zero'
+                )
+                offenders.append(
+                    (cue_data.get('name'), cue_data.get('id'), reason)
+                )
+
+
+def validate_fade_durations_in_contents(contents):
+    """Reject any FadeCue whose duration is missing, unparseable, or <= 0.
+
+    Save-time gate: ``CuemsParser``/``GenericParser`` assigns via
+    ``dict.__setitem__``, bypassing ``FadeCue.set_duration``'s own
+    positive-and-non-zero rule, so a zero coming from a client would reach
+    the XML and later become a silent no-op at reveal (gradient-motiond
+    drops ``dur <= 0`` over fire-and-forget UDP).  Collects ALL offenders and
+    raises a single ``ValueError``; the WS layer forwards the text to the
+    client.
+    """
+    offenders = []
+    _walk_fade_durations(contents, offenders)
+    if offenders:
+        detail = '; '.join(
+            f"'{name or 'unnamed'}' (id {cue_id or 'unknown'}: {reason})"
+            for name, cue_id, reason in offenders
+        )
+        raise ValueError(
+            f"FadeCue duration must be greater than zero: {detail}"
+        )
 
 
 class CuemsDBProject(StringSanitizer):
@@ -269,6 +338,13 @@ class CuemsDBProject(StringSanitizer):
 
         self._clean_dangling_targets(data)
 
+        # Reject zero/unparseable FadeCue durations BEFORE parsing: the parser
+        # bypasses FadeCue.set_duration, and a saved zero later becomes a
+        # silent no-op at reveal (gradient-motiond drops dur <= 0).
+        validate_fade_durations_in_contents(
+            (data.get('CuemsScript', {}).get('CueList') or {}).get('contents') or []
+        )
+
         with self.db.atomic() as transaction:
             try:
                 project.name = StringSanitizer.sanitize_name(data['CuemsScript']['name'])
@@ -400,6 +476,11 @@ class CuemsDBProject(StringSanitizer):
             Logger.error("error: {} {} ;trying to read  project data".format(type(e), e))
             raise e
 
+        # Same save-time gate as update() — see validate_fade_durations_in_contents.
+        validate_fade_durations_in_contents(
+            (data.get('CuemsScript', {}).get('CueList') or {}).get('contents') or []
+        )
+
         with self.db.atomic() as transaction:
             try:
                 project = Project.create(uuid=project_uuid, unix_name=unix_name, name=StringSanitizer.sanitize_name(data['CuemsScript']['name']), description=StringSanitizer.sanitize_text_size(data['CuemsScript']['description']), created=now, modified=now)
@@ -484,6 +565,9 @@ class CuemsDBProject(StringSanitizer):
                     data['CuemsScript']['id'] = new_project_uuid
                     data['CuemsScript']['name'] = project.name
                     data['CuemsScript']['modified'] = project.modified
+                    # NO fade-duration validation here on purpose: the source is
+                    # load_xml of an existing project — legacy scripts must stay
+                    # duplicable; the engine's reveal guard covers them.
                     project_object = CuemsParser(data).parse()
                     self.add_media_relations(dup_project, project_object)
                     self.save_xml(new_unix_name, project_object)
