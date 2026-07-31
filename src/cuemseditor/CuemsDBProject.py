@@ -382,7 +382,7 @@ class CuemsDBProject(StringSanitizer):
         except Exception as e:
             Logger.warning(f"Could not fix media durations: {e}")
 
-    CUE_TYPES = ['AudioCue', 'VideoCue', 'DmxCue', 'ActionCue', 'CueList']
+    CUE_TYPES = ['AudioCue', 'VideoCue', 'DmxCue', 'ActionCue', 'FadeCue', 'CueList']
 
     def _clean_dangling_targets(self, data):
         """Clear target and action_target references that point to non-existing cues.
@@ -429,10 +429,10 @@ class CuemsDBProject(StringSanitizer):
                     if target and target not in valid_ids:
                         Logger.warning(f"{cue_type} {cue_data.get('id')} has dangling target {target}, clearing")
                         cue_data['target'] = None
-                    if cue_type == 'ActionCue':
+                    if cue_type in ('ActionCue', 'FadeCue'):
                         action_target = cue_data.get('action_target')
                         if action_target and action_target not in valid_ids:
-                            Logger.warning(f"ActionCue {cue_data.get('id')} has dangling action_target {action_target}, clearing")
+                            Logger.warning(f"{cue_type} {cue_data.get('id')} has dangling action_target {action_target}, clearing")
                             cue_data['action_target'] = None
 
     def new(self, data, unix_name):
