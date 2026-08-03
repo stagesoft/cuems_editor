@@ -1,0 +1,898 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+      
+      
+        <link rel="next" href="api/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Cuems Editor</title>
+      
+    
+    
+      <link rel="stylesheet" href="assets/stylesheets/main.ec1eaa64.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="assets/_mkdocstrings.css">
+    
+    <script>__md_scope=new URL(".",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    <body dir="ltr">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#cuems-editor" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="." title="Cuems Editor" class="md-header__button md-logo" aria-label="Cuems Editor" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Cuems Editor
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Home
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/stagesoft/cuems-editor" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="." title="Cuems Editor" class="md-nav__button md-logo" aria-label="Cuems Editor" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    Cuems Editor
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/stagesoft/cuems-editor" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="." class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#what-is-cuems-editor" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What is cuems-editor?
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#signal-flow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Signal flow
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#architecture" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Architecture
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Architecture">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#websocket-layer" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        WebSocket layer
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#database-layer" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Database layer
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#upload-layer" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Upload layer
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#support" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Support
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#key-design-decisions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Key design decisions
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Key design decisions">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#foreground-only-execution-no-daemon-layer" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Foreground-only execution (no daemon layer)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#schema-validated-xml-on-every-write" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Schema-validated XML on every write
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#orphan-target-cleanup-before-save" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Orphan-target cleanup before save
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#versioned-filesystem-moves" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Versioned filesystem moves
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#single-nng-requestresponse-socket-for-engine-ipc" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Single NNG request/response socket for engine IPC
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#api-reference" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        API reference
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Documentation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#what-is-cuems-editor" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What is cuems-editor?
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#signal-flow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Signal flow
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#architecture" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Architecture
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Architecture">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#websocket-layer" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        WebSocket layer
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#database-layer" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Database layer
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#upload-layer" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Upload layer
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#support" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Support
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#key-design-decisions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Key design decisions
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Key design decisions">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#foreground-only-execution-no-daemon-layer" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Foreground-only execution (no daemon layer)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#schema-validated-xml-on-every-write" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Schema-validated XML on every write
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#orphan-target-cleanup-before-save" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Orphan-target cleanup before save
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#versioned-filesystem-moves" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Versioned filesystem moves
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#single-nng-requestresponse-socket-for-engine-ipc" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Single NNG request/response socket for engine IPC
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#api-reference" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        API reference
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<!--
+SPDX-FileCopyrightText: 2026 Stagelab Coop SCCL
+SPDX-License-Identifier: GPL-3.0-or-later
+-->
+
+<h1 id="cuems-editor">cuems-editor</h1>
+<p><strong>WebSocket backend and project management server for the CueMS browser-based editor.</strong></p>
+<p><a href="https://pypi.org/project/cuemseditor"><img alt="PyPI - Version" src="https://img.shields.io/pypi/v/cuemseditor.svg" /></a>
+<a href="https://pypi.org/project/cuemseditor"><img alt="PyPI - Python Version" src="https://img.shields.io/pypi/pyversions/cuemseditor.svg" /></a>
+<a href="https://www.gnu.org/licenses/gpl-3.0"><img alt="License: GPL v3" src="https://img.shields.io/badge/License-GPLv3-blue.svg" /></a>
+<a href="https://github.com/stagesoft/cuems-editor/actions/workflows/gh-pages.yml"><img alt="Deploy MkDocs site" src="https://github.com/stagesoft/cuems-editor/actions/workflows/gh-pages.yml/badge.svg" /></a>
+<a href="https://github.com/stagesoft/cuems-editor/actions/workflows/pypi-publish.yml"><img alt="Upload Python Package" src="https://github.com/stagesoft/cuems-editor/actions/workflows/pypi-publish.yml/badge.svg" /></a></p>
+<div class="admonition note">
+<p class="admonition-title">Project README</p>
+<p>For installation instructions, release history, and licensing, see the
+<a href="https://github.com/stagesoft/cuems-editor#readme">project README</a> on GitHub.</p>
+</div>
+<hr />
+<h2 id="what-is-cuems-editor">What is cuems-editor?</h2>
+<p><code>cuems-editor</code> is the backend service that powers the <strong>CueMS</strong> browser-based authoring interface. The frontend is a standard HTML/JS application that communicates exclusively over WebSocket; <code>cuems-editor</code> is the process that receives those connections, manages the project library, and bridges authoring commands to the live <code>cuems-engine</code>.</p>
+<p>The service runs as a systemd unit (<code>cuems-editor.service</code>) inside the <code>/usr/lib/cuems/</code> virtual environment provided by the <code>cuems-utils</code> Debian package. It never forks — process supervision is delegated to systemd <code>Type=simple</code>.</p>
+<table>
+<thead>
+<tr>
+<th>Component</th>
+<th>Role</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>CuemsWsServer</code></td>
+<td>asyncio WebSocket server; session multiplexer and command router</td>
+</tr>
+<tr>
+<td><code>CuemsWsUser</code></td>
+<td>Per-connection session; owns async producer/consumer queues</td>
+</tr>
+<tr>
+<td><code>CuemsDBManager</code></td>
+<td>Database facade; initializes SQLite schema, owns <code>.project</code> and <code>.media</code></td>
+</tr>
+<tr>
+<td><code>CuemsDBProject</code></td>
+<td>Project CRUD, XML script I/O, and filesystem directory management</td>
+</tr>
+<tr>
+<td><code>CuemsDBMedia</code></td>
+<td>Media CRUD, thumbnail / waveform / video-index generation</td>
+</tr>
+<tr>
+<td><code>CuemsDBModel</code></td>
+<td>Peewee ORM models: <code>Project</code>, <code>Media</code>, <code>ProjectMedia</code></td>
+</tr>
+<tr>
+<td><code>CuemsUpload</code></td>
+<td>Async binary upload handler over a dedicated WebSocket connection</td>
+</tr>
+<tr>
+<td><code>CuemsLibraryMaintenance</code></td>
+<td>Library directory bootstrap on first run</td>
+</tr>
+<tr>
+<td><code>CuemsErrors</code></td>
+<td>Shared exception hierarchy</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="signal-flow">Signal flow</h2>
+<pre><code class="language-text">Browser ──WebSocket──► CuemsWsServer
+                              │
+                    ┌─────────┴──────────────────┐
+                    ▼                             ▼
+             CuemsWsUser                   CuemsUpload
+          (JSON commands)              (binary upload frames)
+                    │                             │
+         ┌──────────┴──────────┐                 │
+         ▼                     ▼                 ▼
+   NNG IPC →             CuemsDBManager     CuemsDBMedia.new()
+   cuems-engine          ├── CuemsDBProject      │
+                         │   (project CRUD        │
+                         │    + XML I/O)          │
+                         └── CuemsDBMedia    ─────┘
+                              (media CRUD)
+                              ├── ffmpeg (thumbnails)
+                              ├── audiowaveform (waveforms)
+                              └── cuems-videoindexer (index sidecars)
+</code></pre>
+<p>The primary authoring flow for a <code>project_save</code> command:</p>
+<ol>
+<li>Browser sends <code>{"command": "project_save", "data": {...}}</code> over the main WebSocket.</li>
+<li><code>CuemsWsServer</code> receives the frame and calls the matching handler on <code>CuemsWsUser</code>.</li>
+<li><code>CuemsWsUser</code> deserializes the JSON payload into a <code>CuemsScript</code> via <code>cuemsutils.XmlReaderWriter</code>.</li>
+<li>An orphan-cleanup pass nullifies any <code>action_target</code> referencing a deleted cue UUID.</li>
+<li><code>CuemsDBProject.update()</code> validates the script against <code>script.xsd</code> and writes <code>cue_script.xml</code> to disk.</li>
+<li><code>CuemsWsUser</code> sends <code>{"result": "ok"}</code> back over WebSocket.</li>
+</ol>
+<hr />
+<h2 id="architecture">Architecture</h2>
+<h3 id="websocket-layer">WebSocket layer</h3>
+<p><a href="api/"><code>CuemsWsServer</code></a> — the top-level asyncio server. Owns the NNG <code>Communicator</code> (for engine IPC), the <code>CuemsDBManager</code>, and the active-user dict. Dispatches incoming JSON commands to per-user handlers.</p>
+<ul>
+<li><strong><code>CuemsWsServer</code></strong> — constructs from <code>settings_dict</code> and <code>mappings_dict</code>; <code>.start(port)</code> enters the event loop.</li>
+</ul>
+<p><a href="api/"><code>CuemsWsUser</code></a> — per-connection session object. Owns an <code>incoming</code> and <code>outgoing</code> asyncio queue; the consumer handler feeds the incoming queue from the socket; the producer handler drains the outgoing queue to the socket.</p>
+<ul>
+<li><strong><code>CuemsWsUser</code></strong> — lifetime matches the WebSocket connection; holds <code>session_id</code> once authenticated.</li>
+</ul>
+<h3 id="database-layer">Database layer</h3>
+<p><a href="api/"><code>CuemsDBManager</code></a> — facade that initializes the SQLite database, creates tables on first run, and exposes <code>.project</code> (<code>CuemsDBProject</code>) and <code>.media</code> (<code>CuemsDBMedia</code>) accessors.</p>
+<p><a href="api/"><code>CuemsDBProject</code></a> — full project lifecycle. Projects live at <code>library_path/projects/&lt;unix_name&gt;/cue_script.xml</code>. Uses <code>StringSanitizer</code> from <code>cuemsutils</code> for all user-supplied name strings.</p>
+<ul>
+<li><strong><code>CuemsDBProject</code></strong> — create, read, update, delete, duplicate, trash, restore.</li>
+</ul>
+<p><a href="api/"><code>CuemsDBMedia</code></a> — media file intake and metadata management. On upload, generates a JPEG thumbnail (<code>ffmpeg</code>), an audiowaveform JSON waveform (audio only), and a <code>.idx</code> video index sidecar (video only).</p>
+<ul>
+<li><strong><code>CuemsDBMedia</code></strong> — inherits <code>StringSanitizer</code>; <code>CTimecode.milliseconds_rounded</code> used for <code>audiowaveform -e</code> duration argument.</li>
+<li><strong><code>MediaType</code></strong> — <code>MOVIE</code>, <code>AUDIO</code>, <code>IMAGE</code>.</li>
+</ul>
+<p><a href="api/"><code>CuemsDBModel</code></a> — Peewee ORM schema.</p>
+<ul>
+<li><strong><code>Project</code></strong> — <code>uuid</code>, <code>name</code>, <code>unix_name</code>, <code>description</code>, <code>created</code>, <code>modified</code>, <code>in_trash</code>.</li>
+<li><strong><code>Media</code></strong> — <code>uuid</code>, <code>name</code>, <code>unix_name</code>, <code>description</code>, <code>created</code>, <code>modified</code>, <code>duration</code>, <code>media_type</code>, <code>in_trash</code>.</li>
+<li><strong><code>ProjectMedia</code></strong> — many-to-many join.</li>
+</ul>
+<h3 id="upload-layer">Upload layer</h3>
+<p><a href="api/"><code>CuemsUpload</code></a> — two-phase upload protocol: JSON init frame (filename, size, MD5) followed by binary data frames assembled in a tmp directory; file is moved to the media library only after MD5 verification.</p>
+<h3 id="support">Support</h3>
+<p><a href="api/"><code>CuemsLibraryMaintenance</code></a> — creates <code>media/</code>, <code>media/thumbnails/</code>, <code>media/waveforms/</code>, <code>projects/</code>, and all <code>trash/</code> subtrees on first run.</p>
+<p><a href="api/"><code>CuemsErrors</code></a> — <code>CuemsWsServerError</code>, <code>FileIntegrityError</code>, <code>NonExistentItemError</code>, <code>NotTimeCodeError</code>, <code>EngineError</code>.</p>
+<hr />
+<h2 id="key-design-decisions">Key design decisions</h2>
+<h3 id="foreground-only-execution-no-daemon-layer">Foreground-only execution (no daemon layer)</h3>
+<p><code>python-daemon</code>'s <code>DaemonContext</code> double-forks and closes file descriptors at startup. This is incompatible with NNG sockets (which bind before the fork) and with asyncio's event loop (which does not survive a fork). The daemon layer was removed entirely; systemd <code>Type=simple</code> manages the process lifecycle instead. The concrete invariant: <code>cuems-editor</code> must always be started with a TTY or from systemd, never with <code>--daemon</code>.</p>
+<h3 id="schema-validated-xml-on-every-write">Schema-validated XML on every write</h3>
+<p>Project XML files are validated against <code>cuemsutils</code>'s <code>script.xsd</code> (via <code>XmlReaderWriter</code>) on every save, not just on load. This means a frontend bug that produces a structurally invalid cue tree is rejected at the editor boundary before it can corrupt a file that <code>cuems-engine</code> would later fail to load silently. The alternative — validate only on read — would allow invalid files to accumulate on disk undetected.</p>
+<h3 id="orphan-target-cleanup-before-save">Orphan-target cleanup before save</h3>
+<p>When a cue is deleted in the frontend, <code>ActionCue.action_target</code> fields in sibling cues may still reference the deleted cue's UUID. Rather than enforcing referential integrity at the schema level (which would require cascading deletes in the XSD), the editor runs a pre-save pass that collects all live cue UUIDs and nullifies any <code>action_target</code> that points outside the set. The invariant: no saved <code>cue_script.xml</code> contains a dangling <code>action_target</code>.</p>
+<h3 id="versioned-filesystem-moves">Versioned filesystem moves</h3>
+<p>Renaming a project directory on name collision is delegated to <code>CopyMoveVersioned</code> from <code>cuemsutils</code>. The editor's DB <code>unix_name</code> is updated to match the actual directory name after the move — a prior bug left the DB pointing at a non-existent path after a versioned rename. The invariant: <code>Project.unix_name</code> in the DB always equals the actual directory name on disk.</p>
+<h3 id="single-nng-requestresponse-socket-for-engine-ipc">Single NNG request/response socket for engine IPC</h3>
+<p>All engine commands (<code>load</code>, <code>unload</code>, <code>play</code>, <code>stop</code>, <code>status</code>) go through a single NNG request/response socket rather than a per-command socket or a pub/sub topology. This keeps the engine IPC surface minimal and ensures the editor cannot issue a second command while a previous response is still pending. The address is read from <code>settings_dict['editor_ipc']</code> at startup.</p>
+<hr />
+<h2 id="api-reference">API reference</h2>
+<ul>
+<li><a href="api/">API</a> — <code>CuemsWsServer</code>, <code>CuemsWsUser</code>, <code>CuemsDBManager</code>, <code>CuemsDBProject</code>, <code>CuemsDBMedia</code>, <code>CuemsDBModel</code>, <code>CuemsUpload</code>, <code>CuemsLibraryMaintenance</code>, <code>CuemsErrors</code></li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": ".", "features": [], "search": "assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>
