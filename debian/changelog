@@ -1,3 +1,22 @@
+cuems-editor (0.1.0rc1-3) bookworm; urgency=medium
+
+  * Merge rc1 into debian/bookworm (43 commits since 0.1.0rc1-2, 2026-03-
+    10).
+  * FIX: the 0.1.0rc1-1/-2 debs were cut from a base predating 80c7642
+    (2026-02-05) and still did 'from cuemsutils.daemon import
+    run_daemon'. cuemsutils dropped that module, so against cuems-utils
+    0.1.0rc14 the service died at import with ModuleNotFoundError and
+    restart-looped. The merged rc1 source uses foreground mode under
+    systemd instead.
+  * debian/control: require cuems-utils (>= 0.1.0rc10), matching the
+    lockstep requirement pyproject.toml has declared since 8da2570. The
+    old (>= 0.1.0rc4) floor permitted exactly the editor/utils version
+    skew that caused the breakage above.
+  * Brings in save-time FadeCue duration validation and the CUE_TYPES
+    FadeCue dangling-target fix.
+
+ -- Ion Reguera <ion@stagelab.coop>  Wed, 05 Aug 2026 11:42:30 +0200
+
 cuems-editor (0.1.0rc1-2) UNRELEASED; urgency=medium
 
   * Development build

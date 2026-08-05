@@ -15,7 +15,7 @@ Package: cuems-editor
 Architecture: all
 Depends: ${misc:Depends},
          ${python3:Depends},
-         cuems-utils (>= 0.1.0rc4),
+         cuems-utils (>= 0.1.0rc10),
          cuems-common (>= 1.0.0),
          python3 (>= 3.11)
 Description: CUEMS Editor - Collaborative Universal Edit Management System
