@@ -1,10 +1,15 @@
 #!/usr/bin/env python3
 """
-CLI entry point for cuems-editor WebSocket server
+CLI entry point for cuems-editor WebSocket server.
 
-Supports two modes:
-1. Manual/Development mode: Runs in foreground (default)
-2. Daemon mode: Runs as system daemon (--daemon flag)
+Runs in foreground mode, designed for systemd services (Type=simple).
+Systemd handles process supervision, logging (journald), and restart.
+
+Example systemd service:
+    [Service]
+    Type=simple
+    ExecStart=/usr/lib/cuems/bin/cuems-editor --port 9092
+    Restart=always
 """
 
 import sys
@@ -23,7 +28,6 @@ if __name__ == '__main__' and __package__ is None:
 from cuemsutils.log import Logger
 from cuemsutils.tools.ConfigManager import ConfigManager, ProjectMappings
 from cuemseditor.CuemsWsServer import CuemsWsServer
-from cuemsutils.daemon import run_daemon
 
 
 def get_settings():
@@ -44,6 +48,8 @@ def get_settings():
     settings_dict['waveform_extension'] = '.dat'
     settings_dict['thumbnail_size'] = (240, 240)
     settings_dict['editor_ipc'] = '/tmp/editor.ipc'
+    settings_dict['html_root_path'] = '/var/www/cuems'
+    settings_dict['export_folder_name'] = 'exports'
     return settings_dict
 
 
@@ -67,8 +73,8 @@ def ensure_directories(settings_dict):
 
 
 def run_manual(port=9092):
-    """Run server in manual/development mode (foreground)"""
-    Logger.info("Starting CUEMS Editor in MANUAL mode (foreground)")
+    """Run server in foreground mode"""
+    Logger.info("Starting CUEMS Editor")
     
     # Get configuration
     settings_dict = get_settings()
@@ -87,53 +93,24 @@ def run_manual(port=9092):
         server.start(port)
     except KeyboardInterrupt:
         Logger.info("Received interrupt signal, stopping server...")
-        # server.stop() if such method exists
     except Exception as e:
         Logger.error(f"Server error: {type(e).__name__}: {e}")
         raise
 
 
-def run_daemon_mode(port=9092):
-    """Run server in daemon mode (for systemd)"""
-    Logger.info("Starting CUEMS Editor in DAEMON mode")
-    
-    # Get configuration
-    settings_dict = get_settings()
-    mappings_dict = get_mappings()
-    
-    Logger.info(f"Project mappings: {json.dumps(mappings_dict)}")
-    
-    # Ensure directories
-    ensure_directories(settings_dict)
-    
-    # Create server and run as daemon
-    Logger.info(f"Starting WebSocket server on port {port}")
-    server = CuemsWsServer(settings_dict, mappings_dict)
-    # Set port on server so start() can use it when called by run_daemon()
-    server.port = port
-    run_daemon(server, 'cuems_editor')
-
-
 def main():
-    """Main entry point with argument parsing"""
+    """Main entry point - run editor in foreground"""
     parser = argparse.ArgumentParser(
         description='CUEMS Editor WebSocket Server',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
+Runs in foreground mode. Designed for systemd services (Type=simple).
+Use Ctrl+C to stop when running manually.
+
 Examples:
-  # Run in manual/development mode (foreground)
   %(prog)s
   %(prog)s --port 9092
-  
-  # Run as daemon (for systemd service)
-  %(prog)s --daemon
         """
-    )
-    
-    parser.add_argument(
-        '--daemon',
-        action='store_true',
-        help='Run as daemon (for systemd service). Default: run in foreground'
     )
     
     parser.add_argument(
@@ -144,13 +121,7 @@ Examples:
     )
     
     args = parser.parse_args()
-    
-    if args.daemon:
-        # Daemon mode - for systemd
-        run_daemon_mode(port=args.port)
-    else:
-        # Manual mode - for development/testing
-        run_manual(port=args.port)
+    run_manual(port=args.port)
 
 
 if __name__ == '__main__':

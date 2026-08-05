@@ -2,12 +2,13 @@
 
 This API is still in development and may change without notice.
 
-::: CuemsErrors
-::: CuemsDBMedia
-::: CuemsUpload
-::: CuemsUtils
-::: CuemsWsUser
-::: CuemsWsServer
-::: CuemsDBModel
-::: CuemsProjectManager
-::: CuemsDBProject
+::: cuemseditor.CuemsErrors
+::: cuemseditor.CuemsDBMedia
+::: cuemseditor.CuemsDBModel
+::: cuemseditor.CuemsDBProject
+::: cuemseditor.CuemsLibraryMaintenance
+::: cuemseditor.CuemsProjectManager
+::: cuemseditor.CuemsUpload
+::: cuemseditor.CuemsWsServer
+::: cuemseditor.CuemsWsUser
+

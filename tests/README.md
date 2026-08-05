@@ -19,17 +19,18 @@ This directory contains test files, development scripts, and web interface for t
 ### Legacy Files (Reference Only)
 - **`legacy/`** - Directory containing old Python source files
   - All original Python modules (CuemsWsServer.py, CuemsDBModel.py, etc.)
-  - Old scripts (ws-server.py, run-ws-server.py)
+  - Old scripts (ws-server.py)
   - **Note**: These are duplicates kept for reference only
-  - **Active source code** is in `../src/cuemseditor/`
+  - **Active source code** is in `src/cuemseditor/`
 
 ## Using the Web Interface
+> #### **Note**: All bash code that use `cd` are referenced from the project root.
+
 
 ### 1. Start the WebSocket Server
 
 ```bash
-# From package root
-cd /home/ion/src/cuems/cuems-editor/src/cuemseditor
+cd src/cuemseditor/
 python3 cli.py --port 9092
 ```
 
@@ -37,7 +38,7 @@ python3 cli.py --port 9092
 
 Option A - Simple Python HTTP Server:
 ```bash
-cd /home/ion/src/cuems/cuems-editor/tests
+cd tests/
 python3 -m http.server 8000
 ```
 
@@ -45,7 +46,7 @@ Then open: http://localhost:8000/index.html
 
 Option B - Using Apache (Production):
 - Configure Apache to serve these files from `/var/www/cuems-editor/`
-- See `../apache-conf/000-default-le-ssl.conf` for reference
+- See `apache-conf/000-default-le-ssl.conf` for reference
 
 ### 3. Test WebSocket Upload
 
@@ -74,7 +75,7 @@ For production deployment with Apache:
    sudo cp -r tests/index.html tests/static /var/www/cuems-editor/
    ```
 
-2. Configure Apache proxy (see `../apache-conf/000-default-le-ssl.conf`):
+2. Configure Apache proxy (see `apache-conf/000-default-le-ssl.conf`):
    ```apache
    ProxyPass "/ws" "ws://127.0.0.1:9092/"
    ProxyPass "/upload" "ws://127.0.0.1:9092/upload"
@@ -91,15 +92,15 @@ For production deployment with Apache:
 
 ## Active Package
 
-The production code is in `../src/cuemseditor/`:
+The production code is in `src/cuemseditor/`:
 ```bash
-cd ../src/cuemseditor
-python3 cli.py            # Manual mode
-python3 cli.py --daemon   # Daemon mode
+cd src/cuemseditor
+python3 cli.py            # Run server
+python3 cli.py --port 9092  # Specify port
 ```
 
 Or after installation:
 ```bash
-/usr/lib/cuems/bin/cuems-ws-server
+/usr/lib/cuems/bin/cuems-editor
 systemctl start cuems-editor
 ```

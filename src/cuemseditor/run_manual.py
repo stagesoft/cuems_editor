@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-Quick script to run CUEMS Editor in manual/development mode
+Quick script to run CUEMS Editor in development mode.
 
-This is a convenience wrapper that always runs in foreground mode.
-For daemon mode (systemd), use the main cli.py with --daemon flag.
+This is a convenience wrapper with startup messages.
+For production, use cli.py directly or systemd service.
 """
 
 import sys
@@ -18,10 +18,11 @@ if __name__ == '__main__' and __package__ is None:
 
 from cuemseditor.cli import run_manual
 
-if __name__ == '__main__':
+
+def main():
     import argparse
     
-    parser = argparse.ArgumentParser(description='Run CUEMS Editor in manual mode')
+    parser = argparse.ArgumentParser(description='Run CUEMS Editor in development mode')
     parser.add_argument(
         '--port',
         type=int,
@@ -31,8 +32,12 @@ if __name__ == '__main__':
     
     args = parser.parse_args()
     
-    print(f"Starting CUEMS Editor in manual mode on port {args.port}")
+    print(f"Starting CUEMS Editor on port {args.port}")
     print("Press Ctrl+C to stop")
     print("-" * 60)
     
     run_manual(port=args.port)
+
+
+if __name__ == '__main__':
+    main()
