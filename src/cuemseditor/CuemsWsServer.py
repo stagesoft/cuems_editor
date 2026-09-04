@@ -95,6 +95,7 @@ class CuemsWsServer():
             Logger.error("error: upload folder is not usable")
             raise FileNotFoundError('Can not access upload folder')
 
+        self.network_map_watcher_task = None
         self.reload_network_map_nodes()
 
     def start(self, port=None):
@@ -135,6 +136,7 @@ class CuemsWsServer():
         self.executor = concurrent.futures.ThreadPoolExecutor(thread_name_prefix='ws_ProjectManager_ThreadPoolExecutor', max_workers=5)  # TODO: adjust max workers
         #self.event_loop.set_exception_handler(self.exception_handler) ### TODO:UNCOMENT FOR PRODUCTION
         self.project_server = await serve(self.connection_handler, self.host, self.port)
+        self.network_map_watcher_task = asyncio.create_task(self.watch_network_map())
         for sig in (signal.SIGINT, signal.SIGTERM):
             self.event_loop.add_signal_handler(sig, self.stop)
         Logger.info('server listening on {}, port {}'.format(self.host, self.port))
@@ -153,6 +155,9 @@ class CuemsWsServer():
 
     async def stop_async(self):
         """Wait for the WebSocket server to finish closing, then stop the event loop."""
+        watcher = getattr(self, 'network_map_watcher_task', None)
+        if watcher is not None:
+            watcher.cancel()
         await self.project_server.wait_closed()
         Logger.info('ws server closed')
         self.event_loop.call_soon(self.event_loop.stop)
@@ -480,6 +485,11 @@ class CuemsWsServer():
 
                 self.mappings_dict['nodes'] = merged_nodes
                 self.mappings_dict['new_nodes'] = merged_new_nodes
+                # Adoption goes engine -> /tmp/nodeconf.ipc. cuems-nodeconf
+                # ships disabled on most of the fleet, and then every
+                # adopt/un-adopt click can only end in an error; tell the UI so
+                # it can grey the controls instead.
+                self.mappings_dict['nodeconf_available'] = os.path.exists('/tmp/nodeconf.ipc')
                 Logger.debug(f'Network map reloaded successfully: {len(merged_nodes)} adopted nodes, {len(merged_new_nodes)} new nodes')
                 return True
 
@@ -509,6 +519,54 @@ class CuemsWsServer():
             JSON string ``{"type": "initial_mappings", "value": <mappings_dict>}``.
         """
         return json.dumps({"type": "initial_mappings", "value": self.mappings_dict})
+
+    NETWORK_MAP_POLL_S = 3.0
+
+    async def watch_network_map(self):
+        """Broadcast the node list whenever cuems-nodeconf rewrites the map.
+
+        cuems-nodeconf is resident: it re-merges avahi discovery and rewrites
+        network_map.xml on every (debounced) avahi event or every 30 s. We used
+        to read that file only on connect and right after our own successful
+        nodelist_modify, so a node powered on AFTER the operator opened the
+        settings panel never appeared in `new_nodes` — the adoption feature
+        looked broken exactly when it was needed.
+
+        One mtime poll per host (not per client) at NETWORK_MAP_POLL_S; on a
+        change every connected UI gets the refreshed list.
+        """
+        try:
+            cf_manager = ConfigManager(load_all=False)
+            map_file = cf_manager.conf_path('network_map.xml')
+        except Exception as e:
+            Logger.warning(f'network_map watcher disabled, cannot resolve path: {e}')
+            return
+
+        last_mtime = None
+        try:
+            last_mtime = os.stat(map_file).st_mtime
+        except OSError:
+            pass
+
+        Logger.info(f'watching {map_file} for node list changes')
+        while True:
+            try:
+                await asyncio.sleep(self.NETWORK_MAP_POLL_S)
+                try:
+                    mtime = os.stat(map_file).st_mtime
+                except OSError:
+                    # nodeconf may be mid-replace, or the file may not exist on
+                    # a host where nodeconf never ran. Neither is an error.
+                    continue
+                if last_mtime is not None and mtime != last_mtime:
+                    Logger.debug('network_map.xml changed on disk, broadcasting')
+                    await self.notify_all_node_list_update()
+                last_mtime = mtime
+            except asyncio.CancelledError:
+                Logger.info('network_map watcher stopped')
+                raise
+            except Exception as e:
+                Logger.warning(f'network_map watcher error: {e}')
 
     async def notify_all_node_list_update(self):
         """Reload the network map and broadcast the updated node list to all clients.

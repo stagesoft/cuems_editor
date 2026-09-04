@@ -135,6 +135,7 @@ class CuemsWsUser():
                     "hw_discovery": lambda: self.hw_discovery(action),
                     "nodeconf": lambda: self.nodeconf(action),
                     "nodelist_modify": lambda: self.nodelist_modify(value, action, data.get("modify_action")),
+                    "nodelist_get": lambda: self.nodelist_get(action),
                     "project_status": lambda: self.project_status(action),
                     "project_unload": lambda: self.project_unload(action),
                 }
@@ -397,6 +398,11 @@ class CuemsWsUser():
             if modify_action not in ["ADD", "REMOVE"]:
                 raise ValueError(f"Invalid modify_action: {modify_action}. Must be 'ADD' or 'REMOVE'")
 
+            # Without this a None/empty value travels the whole chain and comes
+            # back from nodeconf as the baffling "Node None not found".
+            if not node_uuid or not isinstance(node_uuid, str):
+                raise ValueError(f"nodelist_modify needs a node uuid, got {node_uuid!r}")
+
             action_uuid = str(new_uuid())
             engine_command = {
                 "action": functionNameAsString(),
@@ -420,6 +426,32 @@ class CuemsWsUser():
         except EngineError as e:
             Logger.error(f"Engine error in nodelist_modify: {e}")
             await self.notify_error_to_user(str(e), action=action)
+        except Exception as e:
+            Logger.error(f"error: {type(e)} {e}")
+            await self.notify_error_to_user(str(e), action=action)
+
+    async def nodelist_get(self, action):
+        """Re-read network_map.xml and send this client the current node list.
+
+        Same payload the client already gets on connect
+        (``initial_mappings``: ``nodes`` = adopted, ``new_nodes`` = discovered
+        but not adopted), so no new client-side handling is needed — it is just
+        a way to refresh on demand instead of reconnecting.
+
+        Args:
+            action: Action name from the WebSocket frame.
+        """
+        Logger.info(f"user {id(self.websocket)} requesting {functionNameAsString()}")
+        try:
+            reload_ok = await self.server.event_loop.run_in_executor(
+                self.server.executor,
+                self.server.reload_network_map_nodes
+            )
+            if not reload_ok:
+                raise ValueError("could not read network_map.xml")
+
+            await self.outgoing.put(self.server.initial_setting_message())
+
         except Exception as e:
             Logger.error(f"error: {type(e)} {e}")
             await self.notify_error_to_user(str(e), action=action)
