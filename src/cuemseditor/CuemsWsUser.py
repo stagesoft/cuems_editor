@@ -479,6 +479,13 @@ class CuemsWsUser():
         in flight this request queues behind it (the engine serializes editor
         commands) and can time out while every node is perfectly healthy.
 
+        The reply also carries the last load's diagnosis — ``missing`` (project
+        nodes not in the cluster at all) and ``unreachable`` (adopted, used by
+        the project, no pong). Their cues will not play, and GO is deliberately
+        *not* blocked. Nothing is done to them here on purpose: this method
+        relays the engine's dict verbatim, so new keys reach the browser with
+        no editor change. Do not add a hop.
+
         Args:
             action: Action name from the WebSocket frame (echoed in the reply).
         """
