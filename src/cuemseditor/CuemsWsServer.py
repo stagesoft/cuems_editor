@@ -488,11 +488,7 @@ class CuemsWsServer():
 
                 self.mappings_dict['nodes'] = merged_nodes
                 self.mappings_dict['new_nodes'] = merged_new_nodes
-                # Adoption goes engine -> /tmp/nodeconf.ipc. cuems-nodeconf
-                # ships disabled on most of the fleet, and then every
-                # adopt/un-adopt click can only end in an error; tell the UI so
-                # it can grey the controls instead.
-                self.mappings_dict['nodeconf_available'] = os.path.exists('/tmp/nodeconf.ipc')
+                self.mappings_dict['nodeconf_available'] = self.nodeconf_available()
                 Logger.debug(f'Network map reloaded successfully: {len(merged_nodes)} adopted nodes, {len(merged_new_nodes)} new nodes')
                 return True
 
@@ -515,12 +511,30 @@ class CuemsWsServer():
         """
         return json.dumps({"type": "initial_template", "value": {"CuemsScript": self.initital_template}})
 
+    NODECONF_IPC = '/tmp/nodeconf.ipc'
+
+    def nodeconf_available(self):
+        """Is cuems-nodeconf reachable right now?
+
+        Adoption goes engine -> /tmp/nodeconf.ipc, and nodeconf ships disabled
+        on most of the fleet; there every adopt/un-adopt click can only end in
+        an error, so the UI wants to grey the controls instead.
+
+        Deliberately sampled per message rather than cached at map-reload time:
+        nodeconf skips the write when the map's content has not changed, and it
+        writes nothing at all once it is stopped — so a flag refreshed only on
+        map changes would happily report `true` for as long as the operator
+        left the panel open after `systemctl stop cuems-nodeconf`.
+        """
+        return os.path.exists(self.NODECONF_IPC)
+
     def initial_setting_message(self):
         """Build the initial mappings message sent to new clients.
 
         Returns:
             JSON string ``{"type": "initial_mappings", "value": <mappings_dict>}``.
         """
+        self.mappings_dict['nodeconf_available'] = self.nodeconf_available()
         return json.dumps({"type": "initial_mappings", "value": self.mappings_dict})
 
     NETWORK_MAP_POLL_S = 3.0
@@ -550,11 +564,24 @@ class CuemsWsServer():
             last_mtime = os.stat(map_file).st_mtime
         except OSError:
             pass
+        last_nodeconf = self.nodeconf_available()
 
         Logger.info(f'watching {map_file} for node list changes')
         while True:
             try:
                 await asyncio.sleep(self.NETWORK_MAP_POLL_S)
+
+                # nodeconf stopping or starting changes nothing on disk, so the
+                # mtime check below would never notice it — and the UI would go
+                # on offering adopt buttons that can only fail.
+                nodeconf_now = self.nodeconf_available()
+                if nodeconf_now != last_nodeconf:
+                    Logger.info(
+                        f'cuems-nodeconf availability changed: {nodeconf_now}'
+                    )
+                    last_nodeconf = nodeconf_now
+                    await self.notify_all_node_list_update()
+
                 try:
                     mtime = os.stat(map_file).st_mtime
                 except OSError:

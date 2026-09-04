@@ -195,10 +195,14 @@ class TestNetworkMapWatcher:
             async def _drive():
                 task = asyncio.ensure_future(server.watch_network_map())
                 await asyncio.sleep(0.05)
-                # nodeconf writes: os.replace bumps the mtime.
-                map_file.write_text('<CuemsNetworkMap><node/></CuemsNetworkMap>')
+                # nodeconf writes: os.replace bumps the mtime. Force it
+                # forward explicitly — a same-second write would otherwise be
+                # invisible on a coarse-timestamp filesystem.
                 import os
-                os.utime(map_file, (0, 0))
+                import time as _time
+                map_file.write_text('<CuemsNetworkMap><node/></CuemsNetworkMap>')
+                future = _time.time() + 10
+                os.utime(map_file, (future, future))
                 await asyncio.sleep(0.05)
                 task.cancel()
                 try:
@@ -257,9 +261,8 @@ class TestNodeconfAvailableFlag:
         with (
             patch('cuemseditor.CuemsWsServer.ConfigManager') as MockCM,
             patch('cuemseditor.CuemsWsServer.NetworkMap') as MockNM,
-            patch(
-                'cuemseditor.CuemsWsServer.os.path.exists',
-                return_value=socket_exists,
+            patch.object(
+                CuemsWsServer, 'nodeconf_available', return_value=socket_exists
             ),
         ):
             MockCM.return_value.conf_path.return_value = str(map_file)
@@ -268,6 +271,63 @@ class TestNodeconfAvailableFlag:
             ok = server.reload_network_map_nodes()
 
         return ok, server.mappings_dict
+
+    def test_the_flag_is_sampled_per_message_not_cached(self):
+        """The scenario this exists for: the operator has Settings open, then
+        someone stops cuems-nodeconf. nodeconf writes nothing when it stops,
+        and it skips the write entirely while the map is unchanged, so a flag
+        refreshed only on map reloads would keep saying True forever.
+        """
+        from cuemseditor.CuemsWsServer import CuemsWsServer
+
+        server = CuemsWsServer.__new__(CuemsWsServer)
+        server.mappings_dict = {'nodes': [], 'new_nodes': []}
+
+        with patch.object(CuemsWsServer, 'nodeconf_available', return_value=True):
+            up = json.loads(server.initial_setting_message())
+        # nodeconf stops. Nothing on disk changes.
+        with patch.object(CuemsWsServer, 'nodeconf_available', return_value=False):
+            down = json.loads(server.initial_setting_message())
+
+        assert up['value']['nodeconf_available'] is True
+        assert down['value']['nodeconf_available'] is False
+
+    def test_watcher_broadcasts_when_nodeconf_goes_away(self, tmp_path):
+        """A stopped nodeconf touches no file, so only an explicit check finds
+        it — otherwise the panel keeps offering buttons that can only fail.
+        """
+        from cuemseditor.CuemsWsServer import CuemsWsServer
+
+        map_file = tmp_path / 'network_map.xml'
+        map_file.write_text('<CuemsNetworkMap/>')
+
+        server = CuemsWsServer.__new__(CuemsWsServer)
+        server.NETWORK_MAP_POLL_S = 0.01
+        server.notify_all_node_list_update = MagicMock(
+            side_effect=lambda: asyncio.sleep(0)
+        )
+        states = [True, False, False, False, False, False, False, False]
+        server.nodeconf_available = MagicMock(side_effect=lambda: states.pop(0) if states else False)
+
+        with patch('cuemseditor.CuemsWsServer.ConfigManager') as MockCM:
+            MockCM.return_value.conf_path.return_value = str(map_file)
+
+            async def _drive():
+                task = asyncio.ensure_future(server.watch_network_map())
+                await asyncio.sleep(0.1)
+                task.cancel()
+                try:
+                    await task
+                except asyncio.CancelledError:
+                    pass
+
+            loop = asyncio.new_event_loop()
+            try:
+                loop.run_until_complete(_drive())
+            finally:
+                loop.close()
+
+        assert server.notify_all_node_list_update.called
 
     def test_true_when_the_socket_is_there(self, tmp_path):
         ok, mappings = self._reload(tmp_path, socket_exists=True)
