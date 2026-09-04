@@ -42,6 +42,34 @@ Commands 													 ->	Responses
 
 {"action" : "hw_discovery"}   									->  {"type": "hw_discovery", "value": "hardware_json"}
 {"action" : "nodelist_modify", "value" : "node_uuid", "modify_action" : "ADD|REMOVE"}		->  {"type": "nodelist_modify", "value": "OK"}
+{"action" : "nodelist_get"}										->  {"type": "initial_mappings", "value": "mappings_json"}
+
+
+Nodes: adoption
+
+The node list is pushed as "initial_mappings" on connect, after a successful
+nodelist_modify, and whenever cuems-nodeconf rewrites network_map.xml (the
+editor watches its mtime). "nodelist_get" is only for refreshing on demand
+without reconnecting; it replies with the same payload, so a client needs no
+extra handling for it.
+
+    value.nodes              adopted nodes
+    value.new_nodes          discovered, not adopted yet
+    value.nodeconf_available false = cuems-nodeconf is not running on this
+                             host, so every adopt/un-adopt WILL fail. Grey the
+                             controls instead of letting the operator click.
+
+Each node carries uuid, mac, name, ip, node_type, adopted, online and the
+optional identity fields role_id / alias / hostname. `online` is nodeconf's
+discovery view (refreshed within ~30 s), NOT runtime liveness.
+
+nodelist_modify is refused, with the reason in the error frame, when:
+  - a project is running or merely loaded (unload it first),
+  - the node is offline, or is the controller (it cannot be un-adopted),
+  - cuems-nodeconf is not responding.
+
+The "nodeconf" action is a legacy stub: nodeconf implements no such verb, so it
+only ever times out. Do not wire it into the UI.
 
 Error responses
 
@@ -68,3 +96,7 @@ Error responses
 
 				->  {"type": "error", "value": "unsupported event: event"}
 				->  {"type": "error", "value": "unsupported action: action"}
+
+SPDX-FileCopyrightText: 2026 Stagelab Coop SCCL
+SPDX-License-Identifier: GPL-3.0-or-later
+SPDX-FileContributor: Ion Reguera <ion@stagelab.coop>
