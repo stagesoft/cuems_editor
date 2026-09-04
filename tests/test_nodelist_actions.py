@@ -338,3 +338,55 @@ class TestNodeconfAvailableFlag:
         ok, mappings = self._reload(tmp_path, socket_exists=False)
         assert ok is True
         assert mappings['nodeconf_available'] is False
+
+
+# ─── node_status (liveness relay) ────────────────────────────────────────
+
+
+class TestNodeStatus:
+    """The engine's runtime view, relayed untouched.
+
+    Kept distinct from each node's `online` field on purpose: `online` is
+    nodeconf's discovery view, `alive` is the engine's sub-second ping/pong.
+    """
+
+    ENGINE_VALUE = {
+        'alive': ['ctrl-uuid'],
+        'adopted': ['ctrl-uuid', 'node01-uuid'],
+        'controller': 'ctrl-uuid',
+        'age_s': 0.12,
+    }
+
+    def test_relays_the_engine_answer_untouched(self, user):
+        with patch.object(
+            user, 'comunicate_with_engine', return_value=self.ENGINE_VALUE
+        ) as mock_engine:
+            user.server.event_loop.run_until_complete(user.node_status('node_status'))
+        msgs = user.server.event_loop.run_until_complete(_drain(user))
+
+        # query_mode is required: the engine answers a dict, not "OK".
+        assert mock_engine.call_args[1]['query_mode'] is True
+        # ...and it must ask the engine for cluster_status, whatever the client
+        # called the action.
+        assert mock_engine.call_args[0][2]['action'] == 'cluster_status'
+        assert msgs[0] == {'type': 'node_status', 'value': self.ENGINE_VALUE}
+
+    def test_a_dead_engine_is_an_error_not_a_silent_empty_answer(self, user):
+        from cuemseditor.CuemsErrors import EngineError
+
+        with patch.object(
+            user, 'comunicate_with_engine',
+            side_effect=EngineError('Timeout: Engine did not respond in 25s'),
+        ):
+            user.server.event_loop.run_until_complete(user.node_status('node_status'))
+        msgs = user.server.event_loop.run_until_complete(_drain(user))
+
+        assert msgs[0]['type'] == 'error'
+        assert msgs[0]['action'] == 'node_status'
+
+    def test_the_action_is_registered(self):
+        import inspect
+
+        from cuemseditor import CuemsWsUser as module
+
+        assert '"node_status":' in inspect.getsource(module.CuemsWsUser.consumer)
